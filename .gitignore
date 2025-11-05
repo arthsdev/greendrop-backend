@@ -1,0 +1,24 @@
+# Build and IDE
+/target/
+/build/
+/out/
+*.iml
+.idea/
+.gradle/
+
+# Logs
+*.log
+
+# Environment
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node (future frontend)
+node_modules/
+dist/
+
+# Docker
+*.pid

@@ -1,0 +1,57 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.3.4'
+	id 'io.spring.dependency-management' version '1.1.5'
+}
+
+group = 'com.greendrop'
+version = '0.0.1-SNAPSHOT'
+description = 'GreenDrop is a sustainable waste collection system connecting citizens and collectors for used cooking oil recycling.'
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// --- Spring Boot core ---
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	// --- Persistence ---
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	runtimeOnly 'org.postgresql:postgresql'
+
+	// --- Mapstruct ---
+	implementation 'org.mapstruct:mapstruct:1.5.5.Final'
+	annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
+
+	// --- Security ---
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+
+	// --- Utils ---
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	// --- MapStruct (DTO mapping) ---
+	implementation 'org.mapstruct:mapstruct:1.6.2'
+	annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.2'
+
+	// --- Redis (optional, for caching / geolocation) ---
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+	// --- DevTools (optional) ---
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
+	// --- Tests ---
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.mockito:mockito-core:5.14.1'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
