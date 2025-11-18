@@ -10,7 +10,8 @@
 *.log
 
 # Environment
-.env
+.env*
+!example.env
 
 # OS files
 .DS_Store

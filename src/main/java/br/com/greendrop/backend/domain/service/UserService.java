@@ -1,6 +1,7 @@
 package br.com.greendrop.backend.domain.service;
 
 import br.com.greendrop.backend.domain.model.User;
+import br.com.greendrop.backend.domain.model.enums.Role;
 import br.com.greendrop.backend.domain.repository.UserRepository;
 import br.com.greendrop.backend.dto.user.UserRequestDTO;
 import br.com.greendrop.backend.dto.user.UserResponseDTO;
@@ -42,7 +43,7 @@ public class UserService {
 
         User user = userMapper.toEntity(dto);
         user.setPassword(passwordEncoder.encode(dto.password()));
-        user.setRole(dto.role() != null ? dto.role() : "USER");
+        user.setRole(Role.USER);
 
         return userMapper.toResponse(userRepository.save(user));
     }

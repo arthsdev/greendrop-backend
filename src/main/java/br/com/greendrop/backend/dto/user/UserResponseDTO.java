@@ -1,13 +1,18 @@
 package br.com.greendrop.backend.dto.user;
 
-// DTO for returning user information in API responses
+import br.com.greendrop.backend.domain.model.enums.Role;
+
+/**
+ * DTO returned in responses (e.g., after login or registration).
+ * Represents a sanitized version of the User entity.
+ */
 public record UserResponseDTO(
-        Long id,
+        String id,
         String name,
         String email,
-        String role,       // USER or COLLECTOR
+        Role role,
         String cep,
         Double latitude,
         Double longitude,
-        Integer points     // gamification points
+        Integer points
 ) {}

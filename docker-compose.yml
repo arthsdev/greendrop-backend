@@ -1,0 +1,53 @@
+version: '3.9'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: greendrop-app
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "${SERVER_PORT}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  db:
+    image: mysql:8.0
+    container_name: greendrop-db
+    env_file:
+      - .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    container_name: greendrop-redis
+    env_file:
+      - .env
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+
+volumes:
+  db_data:
