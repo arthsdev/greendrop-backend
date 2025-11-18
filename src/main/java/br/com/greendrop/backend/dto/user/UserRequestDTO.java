@@ -2,24 +2,24 @@ package br.com.greendrop.backend.dto.user;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 
-// DTO for receiving user registration or update requests
+/**
+ * DTO used for user registration or authentication requests.
+ * Contains only user-provided data (input layer).
+ */
 public record UserRequestDTO(
 
-        @NotBlank(message = "Name is mandatory")
+        @NotBlank(message = "Name cannot be blank")
         String name,
 
-        @NotBlank(message = "Email is mandatory")
-        @Email(message = "Email should be valid")
+        @NotBlank(message = "Email cannot be blank")
+        @Email(message = "Invalid email format")
         String email,
 
-        @NotBlank(message = "Password is mandatory")
-        @Size(min = 6, message = "Password must have at least 6 characters")
+        @NotBlank(message = "Password cannot be blank")
         String password,
 
-        String cep,
-
-        @NotBlank(message = "Role is mandatory")
-        String role // USER or COLLECTOR
+        String cep,        // Optional: ZIP/Postal code
+        Double latitude,   // Optional: Geo coordinate
+        Double longitude   // Optional: Geo coordinate
 ) {}

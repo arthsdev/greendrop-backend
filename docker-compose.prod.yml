@@ -1,0 +1,55 @@
+version: '3.9'
+
+networks:
+  greendrop-network:
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: greendrop-mysql-prod
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3307:3306"
+    networks:
+      - greendrop-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - db_data:/var/lib/mysql
+
+  redis:
+    image: redis:7
+    container_name: greendrop-redis-prod
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    networks:
+      - greendrop-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: greendrop-app-prod
+    env_file:
+      - .env.prod
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - greendrop-network
+    restart: unless-stopped
+
+volumes:
+  db_data:

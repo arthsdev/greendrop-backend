@@ -4,9 +4,10 @@ plugins {
 	id 'io.spring.dependency-management' version '1.1.5'
 }
 
-group = 'com.greendrop'
+group = 'br.com.greendrop'
 version = '0.0.1-SNAPSHOT'
-description = 'GreenDrop is a sustainable waste collection system connecting citizens and collectors for used cooking oil recycling.'
+description = 'GreenDrop API - Sustainable waste collection and recycling platform'
+
 java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(17)
@@ -18,31 +19,46 @@ repositories {
 }
 
 dependencies {
-	// --- Spring Boot core ---
+	// --- Spring Boot Core ---
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
 
 	// --- Persistence ---
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	runtimeOnly 'org.postgresql:postgresql'
 
-	// --- Mapstruct ---
-	implementation 'org.mapstruct:mapstruct:1.5.5.Final'
-	annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
+	// --- Database driver ---
+	runtimeOnly 'com.mysql:mysql-connector-j:8.3.0'
 
-	// --- Security ---
-	implementation 'org.springframework.boot:spring-boot-starter-security'
+	// --- Flyway ---
+	implementation 'org.flywaydb:flyway-core'
+	implementation 'org.flywaydb:flyway-mysql'
 
-	// --- Utils ---
-	compileOnly 'org.projectlombok:lombok'
-	annotationProcessor 'org.projectlombok:lombok'
+	// --- Redis ---
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+	// --- JWT (JJWT - self-hosted) ---
+	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
 
 	// --- MapStruct (DTO mapping) ---
 	implementation 'org.mapstruct:mapstruct:1.6.2'
 	annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.2'
 
-	// --- Redis (optional, for caching / geolocation) ---
-	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	// --- Lombok ---
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	// Lombok + MapStruct
+	annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+
+	// -- Dotenv
+	implementation 'io.github.cdimascio:java-dotenv:5.2.2'
+
+	// Swagger Openapi
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
 
 	// --- DevTools (optional) ---
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'

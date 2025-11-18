@@ -1,24 +1,34 @@
 package br.com.greendrop.backend.domain.model;
 
+import br.com.greendrop.backend.domain.model.enums.Role;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
 @Table(name = "users")
 @Getter
 @Setter
-public class User {
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class User implements UserDetails {
 
     @Id
     @GeneratedValue
     @UuidGenerator
-    private UUID id; // safer and scalable
+    @Column(columnDefinition = "BINARY(16)")
+    private UUID id;
+
 
     @Column(nullable = false)
     @NotBlank
@@ -31,12 +41,51 @@ public class User {
 
     @Column(nullable = false)
     @NotBlank
-    private String password; // stored as hash, never exposed
+    private String password;
 
-    private String role; // USER or COLLECTOR
+    @Enumerated(EnumType.STRING)
+    private Role role;
 
     private String cep;
     private Double latitude;
     private Double longitude;
+
+    @Builder.Default
     private Integer points = 0;
+
+    // ---------------------------
+    // UserDetails Implementation
+    // ---------------------------
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        // Ensures Spring Security recognizes the user's role
+        return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+    }
+
+    @Override
+    public String getUsername() {
+        // Email is used as the "username" for authentication
+        return email;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true; // Account never expires
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true; // Account is not locked
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true; // Password credentials never expire
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true; // User is active/enabled
+    }
 }
