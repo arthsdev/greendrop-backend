@@ -1,3 +1,4 @@
+// ==================== AuthResponseDTO ====================
 package br.com.greendrop.backend.dto.auth;
 
 import br.com.greendrop.backend.dto.user.UserResponseDTO;

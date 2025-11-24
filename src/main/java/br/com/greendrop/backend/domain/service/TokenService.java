@@ -10,27 +10,25 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Manages token lifecycle (save, revoke, validate) and integrates with Redis storage.
- */
 @Service
 @RequiredArgsConstructor
 public class TokenService {
 
     private final RedisTokenRepository redisTokenRepository;
 
-    // Access tokens typically expire quickly (e.g., 15 min)
+    // Access token TTL must match JWT configuration
     private static final Duration ACCESS_TOKEN_TTL = Duration.ofMinutes(15);
 
-    // Refresh tokens typically expire in days (e.g., 7 days)
+    // Refresh token TTL typically ranges from 7 to 30 days
     private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(7);
 
-    /**
-     * Saves access and refresh tokens to Redis with appropriate TTL.
-     */
+    // =============================================================
+    // SAVE ACCESS + REFRESH TOKENS
+    // =============================================================
     public void saveTokens(UUID userId, String accessToken, String refreshToken) {
         Instant now = Instant.now();
 
+        // Build access token entity
         Token access = Token.builder()
                 .userId(userId)
                 .value(accessToken)
@@ -39,6 +37,7 @@ public class TokenService {
                 .expiresAt(now.plus(ACCESS_TOKEN_TTL))
                 .build();
 
+        // Build refresh token entity
         Token refresh = Token.builder()
                 .userId(userId)
                 .value(refreshToken)
@@ -47,38 +46,63 @@ public class TokenService {
                 .expiresAt(now.plus(REFRESH_TOKEN_TTL))
                 .build();
 
+        // Save tokens into Redis with TTL
         redisTokenRepository.saveAccessToken(access, ACCESS_TOKEN_TTL);
         redisTokenRepository.saveRefreshToken(refresh, REFRESH_TOKEN_TTL);
     }
 
-    /**
-     * Revokes a single refresh token (logout).
-     */
+    // =============================================================
+    // REVOKE ONLY THE REFRESH TOKEN
+    // =============================================================
     public void revokeToken(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) return;
+
+        // Deletes the refresh token from Redis (invalidates login session)
         redisTokenRepository.deleteRefreshToken(refreshToken);
     }
 
-    /**
-     * Revokes all tokens associated with a user (e.g., when user logs in again).
-     */
+    // =============================================================
+    // DELETE ALL TOKENS FOR A USER (LOGOUT EVERYWHERE)
+    // =============================================================
     public void deleteAllUserTokens(String userId) {
+        if (userId == null) return;
+
+        // Removes all access + refresh tokens for the given user
         redisTokenRepository.deleteAllUserTokens(userId);
     }
 
-    /**
-     * Checks if a refresh token exists and is not expired or blacklisted.
-     */
+    // =============================================================
+    // VALIDATE REFRESH TOKEN (not expired + not revoked/blacklisted)
+    // =============================================================
     public boolean isTokenValid(String refreshToken) {
-        if (redisTokenRepository.isBlacklisted(refreshToken)) return false;
 
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return false;
+        }
+
+        // Token explicitly blacklisted = invalid
+        if (redisTokenRepository.isBlacklisted(refreshToken)) {
+            return false;
+        }
+
+        // Fetch from Redis
         Optional<Token> stored = redisTokenRepository.findRefreshToken(refreshToken);
+
+        // Token must exist AND be unexpired
         return stored.isPresent() && !stored.get().isExpired();
     }
 
-    /**
-     * Adds a token to the blacklist to prevent reuse after logout.
-     */
+    // =============================================================
+    // BLACKLIST ANY TOKEN (ACCESS OR REFRESH)
+    // =============================================================
     public void blacklistToken(String tokenValue) {
+        if (tokenValue == null || tokenValue.isBlank()) return;
+
+        // If exists as refresh token, blacklist it
+        redisTokenRepository.findRefreshToken(tokenValue)
+                .ifPresent(redisTokenRepository::blacklistToken);
+
+        // If exists as access token, blacklist it
         redisTokenRepository.findAccessToken(tokenValue)
                 .ifPresent(redisTokenRepository::blacklistToken);
     }
