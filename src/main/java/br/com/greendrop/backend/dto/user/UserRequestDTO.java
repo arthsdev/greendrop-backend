@@ -3,6 +3,7 @@ package br.com.greendrop.backend.dto.user;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * Payload for user registration. Contains only client-provided fields.
@@ -21,6 +22,7 @@ public record UserRequestDTO(
 
         @Schema(description = "User password.", example = "StrongPass123!")
         @NotBlank(message = "Password cannot be blank")
+        @Size(min = 8, message = "Password must be at least 8 characters")
         String password,
 
         @Schema(description = "Postal code (optional).", example = "37500-001")

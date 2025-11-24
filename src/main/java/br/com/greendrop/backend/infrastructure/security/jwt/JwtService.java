@@ -1,6 +1,9 @@
 package br.com.greendrop.backend.infrastructure.security.jwt;
 
 import br.com.greendrop.backend.domain.model.User;
+import br.com.greendrop.backend.exception.auth.InvalidCredentialsException;
+import br.com.greendrop.backend.exception.auth.UnauthorizedException;
+import br.com.greendrop.backend.exception.generic.BadRequestException;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,9 +13,6 @@ import org.springframework.stereotype.Service;
 import java.security.Key;
 import java.util.Date;
 
-/**
- * Handles generation, validation, and parsing of JWT access and refresh tokens.
- */
 @Service
 public class JwtService {
 
@@ -31,13 +31,19 @@ public class JwtService {
     @Value("${jwt.audience}")
     private String jwtAudience;
 
+
     private Key getSigningKey() {
-        return Keys.hmacShaKeyFor(secretKey.getBytes());
+        try {
+            return Keys.hmacShaKeyFor(secretKey.getBytes());
+        } catch (Exception e) {
+            throw new BadRequestException();
+        }
     }
 
-    /**
-     * Generates a short-lived access token (used for API access).
-     */
+    // ------------------------------------------------------
+    // TOKEN GENERATION
+    // ------------------------------------------------------
+
     public String generateAccessToken(User user) {
         return Jwts.builder()
                 .setSubject(user.getId().toString())
@@ -51,9 +57,6 @@ public class JwtService {
                 .compact();
     }
 
-    /**
-     * Generates a long-lived refresh token (stored in Redis).
-     */
     public String generateRefreshToken(User user) {
         return Jwts.builder()
                 .setSubject(user.getId().toString())
@@ -66,42 +69,68 @@ public class JwtService {
                 .compact();
     }
 
-    /**
-     * Extracts the userId (UUID string) from a token.
-     */
+
+    // ------------------------------------------------------
+    // VALIDATION + EXTRACTION
+    // ------------------------------------------------------
+
     public String extractUserId(String token) {
-        return parseClaims(token).getSubject();
+        try {
+            return parseClaims(token).getSubject();
+        } catch (ExpiredJwtException e) {
+            throw new UnauthorizedException();
+        } catch (JwtException e) {
+            throw new InvalidCredentialsException();
+        }
     }
 
-    /**
-     * Validates token signature and expiration.
-     */
+
     public boolean validateToken(String token) {
         try {
             parseClaims(token);
             return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
+        } catch (ExpiredJwtException e) {
+            throw new UnauthorizedException();
+        } catch (JwtException e) {
+            throw new InvalidCredentialsException();
         }
     }
 
-    /**
-     * Validates token with user details (used in JwtAuthenticationFilter).
-     */
+
     public boolean isTokenValid(String token, UserDetails userDetails) {
         try {
-            final String userId = extractUserId(token);
-            return userId.equals(((User) userDetails).getId().toString()) && validateToken(token);
+            String userId = extractUserId(token);
+
+            if (!userId.equals(((User) userDetails).getId().toString())) {
+                throw new UnauthorizedException();
+            }
+
+            return validateToken(token);
+
+        } catch (InvalidCredentialsException | UnauthorizedException e) {
+            throw e;
         } catch (Exception e) {
-            return false;
+            throw new InvalidCredentialsException();
         }
     }
 
+
+    // ------------------------------------------------------
+    // PRIVATE - PARSE CLAIMS
+    // ------------------------------------------------------
+
     private Claims parseClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
+        try {
+            return Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+        } catch (ExpiredJwtException e) {
+            throw e;
+        } catch (JwtException e) {
+            throw new InvalidCredentialsException();
+        }
     }
 }
