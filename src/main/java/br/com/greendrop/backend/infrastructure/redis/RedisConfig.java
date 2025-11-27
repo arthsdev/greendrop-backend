@@ -1,5 +1,10 @@
 package br.com.greendrop.backend.infrastructure.redis;
 
+import br.com.greendrop.backend.domain.model.Token;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,8 +16,8 @@ import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSeriali
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 /**
- * Configures Redis connection and serialization strategy for token storage.
- * Uses JSON serialization to ensure cross-language compatibility and readability.
+ * Redis configuration for production and development environments.
+ * Uses GenericJackson2JsonRedisSerializer for full type-safety.
  */
 @Configuration
 public class RedisConfig {
@@ -23,17 +28,16 @@ public class RedisConfig {
     @Value("${spring.data.redis.port}")
     private int redisPort;
 
-    @Value("${spring.data.redis.password:}") // Optional password
+    @Value("${spring.data.redis.password:}")
     private String redisPassword;
 
     /**
-     * Creates a connection factory using Lettuce client (non-blocking, high performance).
+     * Creates LettuceConnectionFactory pointing to Redis instance.
      */
     @Bean
     public LettuceConnectionFactory redisConnectionFactory() {
-        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
-        config.setHostName(redisHost);
-        config.setPort(redisPort);
+        RedisStandaloneConfiguration config =
+                new RedisStandaloneConfiguration(redisHost, redisPort);
 
         if (redisPassword != null && !redisPassword.isBlank()) {
             config.setPassword(RedisPassword.of(redisPassword));
@@ -43,19 +47,38 @@ public class RedisConfig {
     }
 
     /**
-     * Configures RedisTemplate with JSON serialization for values and String for keys.
+     * Type-safe RedisTemplate for Token object using JSON serialization.
+     * Avoids deprecated APIs and ensures correct handling of LocalDateTime/Instant.
      */
     @Bean
-    public RedisTemplate<String, Object> redisTemplate(LettuceConnectionFactory connectionFactory) {
-        RedisTemplate<String, Object> template = new RedisTemplate<>();
+    public RedisTemplate<String, Token> redisTemplate(LettuceConnectionFactory connectionFactory) {
 
+        RedisTemplate<String, Token> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
-        template.setKeySerializer(new StringRedisSerializer());
-        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
 
-        // Optional: for hash structures if you store objects in hash format
+        // Configure custom ObjectMapper
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+        // Enable type information so Redis can deserialize the correct class (Token)
+        mapper.activateDefaultTyping(
+                mapper.getPolymorphicTypeValidator(),
+                ObjectMapper.DefaultTyping.EVERYTHING,
+                JsonTypeInfo.As.PROPERTY
+        );
+
+        // Modern serializer recommended by Spring
+        GenericJackson2JsonRedisSerializer serializer =
+                new GenericJackson2JsonRedisSerializer(mapper);
+
+        // Keys
+        template.setKeySerializer(new StringRedisSerializer());
         template.setHashKeySerializer(new StringRedisSerializer());
-        template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
+
+        // Values
+        template.setValueSerializer(serializer);
+        template.setHashValueSerializer(serializer);
 
         template.afterPropertiesSet();
         return template;

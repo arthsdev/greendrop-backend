@@ -1,5 +1,6 @@
 package br.com.greendrop.backend.infrastructure.security.jwt;
 
+import br.com.greendrop.backend.domain.service.TokenService;
 import br.com.greendrop.backend.infrastructure.security.service.CustomUserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -12,12 +13,17 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-
 import java.io.IOException;
 
 /**
- * Intercepts incoming requests and validates JWT tokens.
- * If valid, sets the user authentication in the security context.
+ * Filter responsible for authenticating requests based on a JWT token.
+ *
+ * Workflow:
+ * 1. Extract token from Authorization header.
+ * 2. Retrieve the user's email from JWT claims.
+ * 3. Load user details.
+ * 4. Validate the token.
+ * 5. Attach authentication to the SecurityContext.
  */
 @Component
 @RequiredArgsConstructor
@@ -25,6 +31,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
+    private final TokenService tokenService;
 
     @Override
     protected void doFilterInternal(
@@ -33,35 +40,44 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        final String authHeader = request.getHeader("Authorization");
+        final String header = request.getHeader("Authorization");
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (header == null || !header.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        final String jwt = authHeader.substring(7);
-        final String userId = jwtService.extractUserId(jwt);
+        final String token = header.replace("Bearer ", "").trim();
 
-        // Check if the user is already authenticated
-        if (userId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(userId);
+        // 1. Check if token is explicitly blacklisted in Redis
+        if (tokenService.isTokenRevoked(token)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-            // Validate token using JwtService
-            if (jwtService.isTokenValid(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken authToken =
+        String email = null;
+        try {
+            email = jwtService.extractEmail(token);
+        } catch (Exception e) {
+            // Invalid or malformed token, skip authentication
+        }
+
+        if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+
+            if (jwtService.isTokenValid(token, userDetails)) {
+                UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
                                 userDetails,
                                 null,
                                 userDetails.getAuthorities()
                         );
 
-                authToken.setDetails(
+                authentication.setDetails(
                         new WebAuthenticationDetailsSource().buildDetails(request)
                 );
 
-                // Register authentication in the SecurityContext
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         }
 
