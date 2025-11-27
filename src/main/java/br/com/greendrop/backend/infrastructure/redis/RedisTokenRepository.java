@@ -3,15 +3,17 @@ package br.com.greendrop.backend.infrastructure.redis;
 import br.com.greendrop.backend.domain.model.Token;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Repository responsible for managing access, refresh, and blacklisted tokens in Redis.
- * Uses Token objects serialized as JSON for flexibility and maintainability.
+ * Redis repository for access, refresh, and blacklisted tokens.
+ * Fully type-safe with Token objects.
  */
 @Repository
 @RequiredArgsConstructor
@@ -20,76 +22,99 @@ public class RedisTokenRepository {
     private static final String PREFIX_ACCESS = "token:access:";
     private static final String PREFIX_REFRESH = "token:refresh:";
     private static final String PREFIX_BLACKLIST = "token:blacklist:";
+    private static final String PREFIX_USER_TOKENS = "user:tokens:";
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final RedisTemplate<String, Token> redisTemplate;
+    private final StringRedisTemplate stringRedisTemplate; // For sets of token IDs per user
 
-    // -----------------------------
+    // ==============================
+    // Generic token operations
+    // ==============================
+    private void saveToken(String prefix, Token token, Duration ttl) {
+        if (token == null || token.getValue() == null || token.getValue().isBlank()) return;
+        redisTemplate.opsForValue().set(prefix + token.getValue(), token, ttl.getSeconds(), TimeUnit.SECONDS);
+
+        // Track token in user's set
+        stringRedisTemplate.opsForSet().add(PREFIX_USER_TOKENS + token.getUserId(), token.getValue());
+    }
+
+    private Optional<Token> findToken(String prefix, String tokenValue) {
+        if (tokenValue == null || tokenValue.isBlank()) return Optional.empty();
+        return Optional.ofNullable(redisTemplate.opsForValue().get(prefix + tokenValue));
+    }
+
+    private void deleteToken(String prefix, String tokenValue) {
+        if (tokenValue == null || tokenValue.isBlank()) return;
+        redisTemplate.delete(prefix + tokenValue);
+    }
+
+    // ==============================
     // Access Token operations
-    // -----------------------------
-
+    // ==============================
     public void saveAccessToken(Token token, Duration ttl) {
-        String key = PREFIX_ACCESS + token.getValue();
-        redisTemplate.opsForValue().set(key, token, ttl.getSeconds(), TimeUnit.SECONDS);
+        saveToken(PREFIX_ACCESS, token, ttl);
     }
 
     public Optional<Token> findAccessToken(String tokenValue) {
-        Object stored = redisTemplate.opsForValue().get(PREFIX_ACCESS + tokenValue);
-        return Optional.ofNullable(stored).map(o -> (Token) o);
+        return findToken(PREFIX_ACCESS, tokenValue);
     }
 
     public void deleteAccessToken(String tokenValue) {
-        redisTemplate.delete(PREFIX_ACCESS + tokenValue);
+        deleteToken(PREFIX_ACCESS, tokenValue);
     }
 
-    // -----------------------------
+    // ==============================
     // Refresh Token operations
-    // -----------------------------
-
+    // ==============================
     public void saveRefreshToken(Token token, Duration ttl) {
-        String key = PREFIX_REFRESH + token.getValue();
-        redisTemplate.opsForValue().set(key, token, ttl.getSeconds(), TimeUnit.SECONDS);
+        saveToken(PREFIX_REFRESH, token, ttl);
     }
 
     public Optional<Token> findRefreshToken(String tokenValue) {
-        Object stored = redisTemplate.opsForValue().get(PREFIX_REFRESH + tokenValue);
-        return Optional.ofNullable(stored).map(o -> (Token) o);
+        return findToken(PREFIX_REFRESH, tokenValue);
     }
 
     public void deleteRefreshToken(String tokenValue) {
-        redisTemplate.delete(PREFIX_REFRESH + tokenValue);
+        deleteToken(PREFIX_REFRESH, tokenValue);
     }
 
-    // -----------------------------
+    // ==============================
     // Blacklist operations
-    // -----------------------------
-
-    /**
-     * Adds a token to the blacklist for the remaining lifetime.
-     */
+    // ==============================
     public void blacklistToken(Token token) {
-        String key = PREFIX_BLACKLIST + token.getValue();
+        if (token == null || token.getValue() == null || token.getValue().isBlank()) return;
         long ttl = token.getRemainingTTLSeconds();
-        redisTemplate.opsForValue().set(key, true, ttl, TimeUnit.SECONDS);
+        if (ttl > 0) {
+            redisTemplate.opsForValue().set(PREFIX_BLACKLIST + token.getValue(), token, ttl, TimeUnit.SECONDS);
+        }
     }
 
-    /**
-     * Checks if a token is blacklisted.
-     */
     public boolean isBlacklisted(String tokenValue) {
-        Boolean exists = redisTemplate.hasKey(PREFIX_BLACKLIST + tokenValue);
-        return Boolean.TRUE.equals(exists);
+        if (tokenValue == null || tokenValue.isBlank()) return true;
+        return redisTemplate.hasKey(PREFIX_BLACKLIST + tokenValue);
     }
 
-    // -----------------------------
-    //  Utility
-    // -----------------------------
+    public void deleteBlacklistToken(String tokenValue) {
+        deleteToken(PREFIX_BLACKLIST, tokenValue);
+    }
 
-    /**
-     * Deletes all tokens related to a specific user (access + refresh).
-     * This is optional and not O(1), but useful for forced logout or security resets.
-     */
+    // ==============================
+    // Delete all tokens for a user
+    // ==============================
     public void deleteAllUserTokens(String userId) {
-        redisTemplate.delete(redisTemplate.keys(PREFIX_ACCESS + "user:" + userId + "*"));
-        redisTemplate.delete(redisTemplate.keys(PREFIX_REFRESH + "user:" + userId + "*"));
+        if (userId == null || userId.isBlank()) return;
+
+        String userSetKey = PREFIX_USER_TOKENS + userId;
+        Set<String> tokens = stringRedisTemplate.opsForSet().members(userSetKey);
+
+        if (tokens != null) {
+            for (String tokenValue : tokens) {
+                deleteAccessToken(tokenValue);
+                deleteRefreshToken(tokenValue);
+                deleteBlacklistToken(tokenValue);
+            }
+        }
+
+        stringRedisTemplate.delete(userSetKey);
     }
 }

@@ -23,7 +23,7 @@ public class GlobalExceptionHandler {
     }
 
     // =====================================================================
-    // ➤ Handle @Valid validation exceptions (DTO validation errors)
+    //  Handle @Valid validation exceptions (DTO validation errors)
     // =====================================================================
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex,
@@ -49,7 +49,7 @@ public class GlobalExceptionHandler {
     }
 
     // =====================================================================
-    // ➤ Handle custom domain exceptions (BaseException)
+    //  Handle custom domain exceptions (BaseException)
     // =====================================================================
     @ExceptionHandler(BaseException.class)
     public ResponseEntity<ApiError> handleBaseException(BaseException ex,
@@ -69,12 +69,13 @@ public class GlobalExceptionHandler {
     }
 
     // =====================================================================
-    // ➤ Handle any unhandled exception (fallback)
+    //  Handle any unhandled exception (fallback)
     // =====================================================================
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneric(Exception ex,
                                                   ServletWebRequest request) {
 
+        //TODO: Logback for better log registration
         ex.printStackTrace(); // register the error in logs
 
         ApiError apiError = ApiError.builder()
@@ -89,7 +90,7 @@ public class GlobalExceptionHandler {
     }
 
     // =====================================================================
-    // ➤ Helper method for message resolution
+    //  Helper method for message resolution
     // =====================================================================
     private String getMessage(ErrorCode errorCode) {
         return messageSource.getMessage(

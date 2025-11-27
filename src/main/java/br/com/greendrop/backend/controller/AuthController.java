@@ -3,7 +3,7 @@ package br.com.greendrop.backend.controller;
 import br.com.greendrop.backend.domain.service.AuthService;
 import br.com.greendrop.backend.dto.auth.AuthRequestDTO;
 import br.com.greendrop.backend.dto.auth.AuthResponseDTO;
-import br.com.greendrop.backend.dto.auth.RefreshTokenRequestDTO;
+import br.com.greendrop.backend.dto.auth.AuthTokens;
 import br.com.greendrop.backend.dto.user.UserRequestDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -13,116 +13,142 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * REST controller for authentication operations:
- * - User registration
- * - Login
- * - Refresh token
- * - Logout
- */
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Authentication", description = "Authentication and token management endpoints")
+@Tag(name = "Authentication", description = "Endpoints for user authentication and token lifecycle management")
 public class AuthController {
 
     private final AuthService authService;
+    private static final String REFRESH_COOKIE = "refreshToken";
+    private static final String COOKIE_PATH = "/api/auth";
 
-    // ---------------------------
+    // ========================================================================
     // REGISTER
-    // ---------------------------
+    // ========================================================================
     @PostMapping("/register")
     @Operation(
             summary = "Register a new user",
-            description = "Creates a new user account and returns access + refresh tokens. "
-                    + "Password must be at least 8 characters, with uppercase, lowercase, number, and special character.",
+            description = "Creates a user account, returns access token and sets refresh token in a secure HttpOnly cookie",
             responses = {
-                    @ApiResponse(responseCode = "200", description = "User successfully registered",
-                            content = @Content(
-                                    mediaType = "application/json",
-                                    schema = @Schema(implementation = AuthResponseDTO.class),
-                                    examples = @ExampleObject(
-                                            value = """
-                                                    {
-                                                      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                                                      "user": {
-                                                        "id": "123e4567-e89b-12d3-a456-426614174000",
-                                                        "name": "Fabiano Augusto",
-                                                        "email": "fabiano@example.com",
-                                                        "role": "USER",
-                                                        "cep": "37500-000",
-                                                        "latitude": -22.4242,
-                                                        "longitude": -45.4584,
-                                                        "points": 0
-                                                      }
-                                                    }
-                                                    """
-                                    )
+                    @ApiResponse(responseCode = "201", description = "User registered successfully",
+                            content = @Content(schema = @Schema(implementation = AuthResponseDTO.class),
+                                    examples = @ExampleObject(value = """
+                                            {
+                                              "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+                                              "expiresIn": 3600,
+                                              "user": {
+                                                "id": "uuid",
+                                                "name": "Fabiano",
+                                                "email": "fabiano@example.com",
+                                                "role": "USER"
+                                              }
+                                            }
+                                            """)
                             )),
                     @ApiResponse(responseCode = "409", description = "Email already exists"),
                     @ApiResponse(responseCode = "400", description = "Invalid input data")
             }
     )
     public ResponseEntity<AuthResponseDTO> register(@Valid @RequestBody UserRequestDTO dto) {
-        return ResponseEntity.ok(authService.register(dto));
+        AuthTokens tokens = authService.register(dto);
+        ResponseCookie cookie = buildRefreshCookie(tokens.refreshToken());
+        return ResponseEntity.status(201)
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(new AuthResponseDTO(tokens.accessToken(), tokens.expiresIn(), tokens.user()));
     }
 
-    // ---------------------------
+    // ========================================================================
     // LOGIN
-    // ---------------------------
+    // ========================================================================
     @PostMapping("/login")
     @Operation(
             summary = "Authenticate user",
-            description = "Authenticates user and returns access + refresh tokens",
+            description = "Validates email and password, returns access token and sets refresh token in HttpOnly cookie",
             responses = {
                     @ApiResponse(responseCode = "200", description = "User authenticated successfully",
-                            content = @Content(
-                                    mediaType = "application/json",
-                                    schema = @Schema(implementation = AuthResponseDTO.class)
-                            )),
+                            content = @Content(schema = @Schema(implementation = AuthResponseDTO.class))),
                     @ApiResponse(responseCode = "401", description = "Invalid credentials"),
                     @ApiResponse(responseCode = "429", description = "Too many login attempts")
             }
     )
     public ResponseEntity<AuthResponseDTO> login(@Valid @RequestBody AuthRequestDTO dto) {
-        return ResponseEntity.ok(authService.login(dto.email(), dto.password()));
+        AuthTokens tokens = authService.login(dto.email(), dto.password());
+        ResponseCookie cookie = buildRefreshCookie(tokens.refreshToken());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(new AuthResponseDTO(tokens.accessToken(), tokens.expiresIn(), tokens.user()));
     }
 
-    // ---------------------------
+    // ========================================================================
     // REFRESH TOKEN
-    // ---------------------------
+    // ========================================================================
     @PostMapping("/refresh")
     @Operation(
             summary = "Refresh access token",
-            description = "Generates a new access token using a valid refresh token. "
-                    + "The old refresh token is invalidated and a new one is issued.",
+            description = "Validates refresh token in HttpOnly cookie, rotates it and returns new access token with new refresh cookie",
             responses = {
                     @ApiResponse(responseCode = "200", description = "New access token issued",
-                            content = @Content(mediaType = "application/json")),
-                    @ApiResponse(responseCode = "400", description = "Missing or invalid token")
+                            content = @Content(schema = @Schema(implementation = AuthResponseDTO.class))),
+                    @ApiResponse(responseCode = "400", description = "Missing refresh token cookie"),
+                    @ApiResponse(responseCode = "401", description = "Invalid refresh token")
             }
     )
-    public ResponseEntity<String> refresh(@Valid @RequestBody RefreshTokenRequestDTO request) {
-        return ResponseEntity.ok(authService.refreshAccessToken(request.refreshToken()));
+    public ResponseEntity<AuthResponseDTO> refresh(
+            @CookieValue(name = REFRESH_COOKIE, required = false) String refreshTokenCookie
+    ) {
+        if (refreshTokenCookie == null) return ResponseEntity.badRequest().build();
+        AuthTokens tokens = authService.refresh(refreshTokenCookie);
+        ResponseCookie cookie = buildRefreshCookie(tokens.refreshToken());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(new AuthResponseDTO(tokens.accessToken(), tokens.expiresIn(), tokens.user()));
     }
 
-    // ---------------------------
+    // ========================================================================
     // LOGOUT
-    // ---------------------------
+    // ========================================================================
     @PostMapping("/logout")
     @Operation(
             summary = "Logout user",
-            description = "Revokes and blacklists the provided refresh token. Idempotent operation.",
+            description = "Invalidates the refresh token and clears the HttpOnly cookie",
             responses = {
-                    @ApiResponse(responseCode = "204", description = "User logged out successfully"),
-                    @ApiResponse(responseCode = "400", description = "Missing or invalid token")
+                    @ApiResponse(responseCode = "204", description = "Logged out successfully")
             }
     )
-    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshTokenRequestDTO request) {
-        authService.logout(request.refreshToken());
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<Void> logout(
+            @CookieValue(name = REFRESH_COOKIE, required = false) String refreshTokenCookie
+    ) {
+        if (refreshTokenCookie != null) {
+            authService.logout(refreshTokenCookie);
+        }
+        ResponseCookie clear = ResponseCookie.from(REFRESH_COOKIE, "")
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("None")
+                .path(COOKIE_PATH)
+                .maxAge(0)
+                .build();
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, clear.toString())
+                .build();
+    }
+
+    // ========================================================================
+    // PRIVATE HELPER - BUILD COOKIE
+    // ========================================================================
+    private ResponseCookie buildRefreshCookie(String token) {
+        return ResponseCookie.from(REFRESH_COOKIE, token)
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("None")
+                .path(COOKIE_PATH)
+                .maxAge(7 * 24 * 3600) // 7 days
+                .build();
     }
 }

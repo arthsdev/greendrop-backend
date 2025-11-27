@@ -29,7 +29,6 @@ public class User implements UserDetails {
     @Column(columnDefinition = "BINARY(16)")
     private UUID id;
 
-
     @Column(nullable = false)
     @NotBlank
     private String name;
@@ -53,39 +52,39 @@ public class User implements UserDetails {
     @Builder.Default
     private Integer points = 0;
 
+    @Builder.Default
+    private boolean active = true;
+
     // ---------------------------
     // UserDetails Implementation
     // ---------------------------
-
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        // Ensures Spring Security recognizes the user's role
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
 
     @Override
     public String getUsername() {
-        // Email is used as the "username" for authentication
         return email;
     }
 
     @Override
     public boolean isAccountNonExpired() {
-        return true; // Account never expires
+        return true;
     }
 
     @Override
     public boolean isAccountNonLocked() {
-        return true; // Account is not locked
+        return true;
     }
 
     @Override
     public boolean isCredentialsNonExpired() {
-        return true; // Password credentials never expire
+        return true;
     }
 
     @Override
     public boolean isEnabled() {
-        return true; // User is active/enabled
+        return active;
     }
 }

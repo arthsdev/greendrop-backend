@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 
 /**
- * Handles unauthorized access attempts (401 responses).
+ * Handles unauthorized access attempts and returns a 401 response.
  */
 @Component
 public class JwtAuthEntryPoint implements AuthenticationEntryPoint {
@@ -19,6 +19,10 @@ public class JwtAuthEntryPoint implements AuthenticationEntryPoint {
             HttpServletResponse response,
             AuthenticationException authException
     ) throws IOException {
-        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized: " + authException.getMessage());
+
+        response.sendError(
+                HttpServletResponse.SC_UNAUTHORIZED,
+                "Unauthorized"
+        );
     }
 }

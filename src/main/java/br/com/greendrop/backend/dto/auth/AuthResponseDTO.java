@@ -14,6 +14,9 @@ public record AuthResponseDTO(
         @Schema(description = "JWT access token.", example = "eyJhbGciOiJIUzI1NiIs...")
         String accessToken,
 
+        @Schema(description = "Expiration time")
+        long expiresIn,
+
         @Schema(description = "Authenticated user data.")
         UserResponseDTO user
 ) {}
