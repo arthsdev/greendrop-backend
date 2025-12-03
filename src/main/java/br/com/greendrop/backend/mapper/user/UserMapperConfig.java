@@ -1,5 +1,6 @@
-package br.com.greendrop.backend.mapper;
+package br.com.greendrop.backend.mapper.user;
 
+import br.com.greendrop.backend.mapper.UserMapperImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

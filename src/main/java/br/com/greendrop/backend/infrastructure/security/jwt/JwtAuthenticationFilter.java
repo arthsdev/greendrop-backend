@@ -13,17 +13,20 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+
 import java.io.IOException;
 
 /**
- * Filter responsible for authenticating requests based on a JWT token.
+ * JWT authentication filter (stateless).
  *
- * Workflow:
- * 1. Extract token from Authorization header.
- * 2. Retrieve the user's email from JWT claims.
- * 3. Load user details.
- * 4. Validate the token.
- * 5. Attach authentication to the SecurityContext.
+ * Responsibilities:
+ *  - Extract token from header
+ *  - Validate signature + expiration (JwtService)
+ *  - Check if token is revoked (TokenService)
+ *  - Ensure token is ACCESS type
+ *  - Load UserDetails and set SecurityContext
+ *
+ * This filter must remain thin — heavy logic stays in services.
  */
 @Component
 @RequiredArgsConstructor
@@ -40,47 +43,63 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        final String header = request.getHeader("Authorization");
+        String token = extractToken(request.getHeader("Authorization"));
 
-        if (header == null || !header.startsWith("Bearer ")) {
+        if (!isTokenUsable(token)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        final String token = header.replace("Bearer ", "").trim();
-
-        // 1. Check if token is explicitly blacklisted in Redis
-        if (tokenService.isTokenRevoked(token)) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        String email = null;
-        try {
-            email = jwtService.extractEmail(token);
-        } catch (Exception e) {
-            // Invalid or malformed token, skip authentication
-        }
-
-        if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-
-            if (jwtService.isTokenValid(token, userDetails)) {
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities()
-                        );
-
-                authentication.setDetails(
-                        new WebAuthenticationDetailsSource().buildDetails(request)
-                );
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-            }
-        }
+        authenticate(token, request);
 
         filterChain.doFilter(request, response);
+    }
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+
+    private String extractToken(String header) {
+        if (header == null) return null;
+
+        if (!header.toLowerCase().startsWith("bearer ")) return null;
+
+        String token = header.substring(7).trim();
+
+        return token.isBlank() ? null : token;
+    }
+
+    /**
+     * Lightweight validation to determine if a token should proceed to authentication.
+     */
+    private boolean isTokenUsable(String token) {
+        return token != null
+                && jwtService.validateToken(token)               // signature + expiration
+                && !"refresh".equals(jwtService.extractType(token))  // ensure ACCESS token
+                && !tokenService.isTokenRevoked(token);          // blacklist
+    }
+
+    private void authenticate(String token, HttpServletRequest request) {
+        String email = jwtService.extractEmail(token);
+        if (email == null) return;
+
+        // Avoid overriding context if already authenticated
+        if (SecurityContextHolder.getContext().getAuthentication() != null) return;
+
+        UserDetails user = userDetailsService.loadUserByUsername(email);
+
+        // Validate ownership (token must belong to same user)
+        if (!jwtService.isTokenValid(token, user)) return;
+
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken(
+                        user,
+                        token,                 // raw token kept as credentials
+                        user.getAuthorities()
+                );
+
+        auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 }
