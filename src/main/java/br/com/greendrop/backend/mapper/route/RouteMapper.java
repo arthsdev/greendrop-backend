@@ -6,33 +6,22 @@ import br.com.greendrop.backend.dto.route.RouteResponseDTO;
 import br.com.greendrop.backend.dto.route.RouteStopDTO;
 import org.mapstruct.DecoratedWith;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
 import java.util.List;
 
 /**
- * MapStruct interface responsible for converting Route entities
- * and their children (RouteStop) into DTOs.
- *
- * The complex logic (sorting, nested conversions, business-specific formatting)
- * is delegated to RouteMapperDecorator.
+ * RouteMapper — MapStruct interface for Route and RouteStop.
  */
 @Mapper(componentModel = "spring")
 @DecoratedWith(RouteMapperDecorator.class)
 public interface RouteMapper {
 
-    /**
-     * Converts a Route entity into its full response DTO.
-     * Complex fields (like sorted stops) are handled by the decorator.
-     */
+    @Mapping(target = "status", expression = "java(route.getStatus() != null ? route.getStatus().name() : null)")
     RouteResponseDTO toResponse(Route route);
 
-    /**
-     * Converts a RouteStop entity into its response DTO.
-     */
+    @Mapping(target = "status", expression = "java(stop.getStatus() != null ? stop.getStatus().name() : null)")
     RouteStopDTO toStopResponse(RouteStop stop);
 
-    /**
-     * Converts a list of RouteStop entities into a list of DTOs.
-     */
     List<RouteStopDTO> toStopResponseList(List<RouteStop> stops);
 }

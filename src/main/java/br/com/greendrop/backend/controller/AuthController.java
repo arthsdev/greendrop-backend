@@ -5,6 +5,8 @@ import br.com.greendrop.backend.dto.auth.AuthRequestDTO;
 import br.com.greendrop.backend.dto.auth.AuthResponseDTO;
 import br.com.greendrop.backend.dto.auth.AuthTokens;
 import br.com.greendrop.backend.dto.user.UserRequestDTO;
+import br.com.greendrop.backend.dto.user.UserResponseDTO;
+import br.com.greendrop.backend.exception.global.ErrorCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -34,33 +36,32 @@ public class AuthController {
     @PostMapping("/register")
     @Operation(
             summary = "Register a new user",
-            description = "Creates a user account, returns access token and sets refresh token in a secure HttpOnly cookie",
+            description = "Creates a new user account. No tokens are issued during registration; the user must log in afterwards.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "User registered successfully",
-                            content = @Content(schema = @Schema(implementation = AuthResponseDTO.class),
+                            content = @Content(schema = @Schema(implementation = UserResponseDTO.class),
                                     examples = @ExampleObject(value = """
-                                            {
-                                              "accessToken": "eyJhbGciOiJIUzI1NiIs...",
-                                              "expiresIn": 3600,
-                                              "user": {
-                                                "id": "uuid",
-                                                "name": "Fabiano",
-                                                "email": "fabiano@example.com",
-                                                "role": "USER"
-                                              }
-                                            }
-                                            """)
+                                        {
+                                          "id": "c12fa458-5523-4cd3-b805-aa88c2ed921a",
+                                          "name": "Fabiano Augusto",
+                                          "email": "fabiano@example.com",
+                                          "role": "USER",
+                                          "cep": "37500-001",
+                                          "latitude": -23.55052,
+                                          "longitude": -46.633308,
+                                          "points": 120
+                                        }
+                                        """)
                             )),
-                    @ApiResponse(responseCode = "409", description = "Email already exists"),
-                    @ApiResponse(responseCode = "400", description = "Invalid input data")
+                    @ApiResponse(responseCode = "409", description = "Email already exists",
+                            content = @Content(schema = @Schema(implementation = ErrorCode.class))),
+                    @ApiResponse(responseCode = "400", description = "Invalid input data",
+                            content = @Content(schema = @Schema(implementation = ErrorCode.class)))
             }
     )
-    public ResponseEntity<AuthResponseDTO> register(@Valid @RequestBody UserRequestDTO dto) {
-        AuthTokens tokens = authService.register(dto);
-        ResponseCookie cookie = buildRefreshCookie(tokens.refreshToken());
-        return ResponseEntity.status(201)
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(new AuthResponseDTO(tokens.accessToken(), tokens.expiresIn(), tokens.user()));
+    public ResponseEntity<UserResponseDTO> register(@Valid @RequestBody UserRequestDTO dto) {
+        UserResponseDTO user = authService.register(dto);
+        return ResponseEntity.status(201).body(user);
     }
 
     // ========================================================================

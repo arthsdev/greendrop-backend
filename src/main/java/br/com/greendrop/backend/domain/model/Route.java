@@ -41,6 +41,7 @@ public class Route {
 
     @OneToMany(mappedBy = "route", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("stopOrder ASC")
+    @Builder.Default
     private List<RouteStop> stops = new ArrayList<>();
 
     private Instant createdAt;

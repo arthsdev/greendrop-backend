@@ -38,7 +38,7 @@ public class User implements UserDetails {
     @Email
     private String email;
 
-    @Column(nullable = false)
+    @Column(name = "password_hash", nullable = false)
     @NotBlank
     private String password;
 

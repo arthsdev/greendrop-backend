@@ -1,4 +1,4 @@
-package br.com.greendrop.backend.domain.service.validation;
+package br.com.greendrop.backend.domain.service.route.validation;
 
 import br.com.greendrop.backend.domain.model.Route;
 import br.com.greendrop.backend.domain.model.RouteStop;

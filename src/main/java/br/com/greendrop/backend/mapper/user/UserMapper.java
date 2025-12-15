@@ -4,10 +4,10 @@ import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.dto.user.UserRequestDTO;
 import br.com.greendrop.backend.dto.user.UserResponseDTO;
 import br.com.greendrop.backend.dto.user.UserUpdateDTO;
+import org.mapstruct.DecoratedWith;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
-import org.mapstruct.DecoratedWith;
 
 /**
  * MapStruct interface responsible for converting

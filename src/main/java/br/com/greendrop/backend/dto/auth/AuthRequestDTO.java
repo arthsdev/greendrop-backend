@@ -11,10 +11,11 @@ import jakarta.validation.constraints.NotBlank;
 public record AuthRequestDTO(
 
         @Schema(description = "User email.", example = "fabiano@example.com")
-        @NotBlank @Email
+        @NotBlank(message = "{error.email.required}")
+        @Email(message = "{error.email.invalid}")
         String email,
 
         @Schema(description = "User password.", example = "StrongPass123!")
-        @NotBlank
+        @NotBlank(message = "{error.password.required}")
         String password
 ) {}
