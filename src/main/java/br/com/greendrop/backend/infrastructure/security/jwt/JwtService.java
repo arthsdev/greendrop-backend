@@ -5,6 +5,7 @@ import br.com.greendrop.backend.exception.auth.InvalidTokenException;
 import br.com.greendrop.backend.exception.auth.TokenExpiredException;
 import br.com.greendrop.backend.exception.auth.UnauthorizedException;
 import br.com.greendrop.backend.exception.generic.BadRequestException;
+import br.com.greendrop.backend.exception.global.ErrorCode;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,7 +42,7 @@ public class JwtService {
         try {
             return Keys.hmacShaKeyFor(secretKey.getBytes());
         } catch (Exception e) {
-            throw new BadRequestException("Invalid secret key configuration");
+            throw new BadRequestException(ErrorCode.INVALID_SECRET_KEY);
         }
     }
 
@@ -110,7 +111,7 @@ public class JwtService {
     // -----------------------------------------------------------------------
 
     public boolean validateToken(String token) {
-        getClaims(token); // dispara exception se inválido
+        getClaims(token);
         return true;
     }
 

@@ -1,10 +1,10 @@
 package br.com.greendrop.backend.controller;
 
-import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.domain.service.UserService;
 import br.com.greendrop.backend.dto.user.PasswordUpdateDTO;
 import br.com.greendrop.backend.dto.user.UserResponseDTO;
 import br.com.greendrop.backend.dto.user.UserUpdateDTO;
+import br.com.greendrop.backend.infrastructure.security.service.CurrentUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -16,7 +16,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -27,9 +26,11 @@ import java.util.UUID;
 public class UserController {
 
     private final UserService userService;
+    private final CurrentUserService currentUserService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, CurrentUserService currentUserService) {
         this.userService = userService;
+        this.currentUserService = currentUserService;
     }
 
     // ===============================================================
@@ -86,7 +87,7 @@ public class UserController {
                                                       "role": "USER",
                                                       "cep": "37500-000",
                                                       "latitude": -22.4242,
-                                                      "longitude": -45.4584",
+                                                      "longitude": -45.4584,
                                                       "points": 100
                                                     }
                                                     """
@@ -128,8 +129,8 @@ public class UserController {
                     @ApiResponse(responseCode = "404", description = "User not found")
             }
     )
-    public UserResponseDTO getMe(@AuthenticationPrincipal User user) {
-        return userService.getLogged(user.getId());
+    public UserResponseDTO getMe() {
+        return userService.getLoggedUser();
     }
 
     // ===============================================================
@@ -148,11 +149,8 @@ public class UserController {
                     @ApiResponse(responseCode = "404", description = "User not found")
             }
     )
-    public UserResponseDTO updateMe(
-            @AuthenticationPrincipal User user,
-            @Valid @RequestBody UserUpdateDTO dto
-    ) {
-        return userService.updateUserProfile(user.getId(), dto);
+    public UserResponseDTO updateMe(@Valid @RequestBody UserUpdateDTO dto) {
+        return userService.updateUserProfile(dto);
     }
 
     // ===============================================================
@@ -163,21 +161,17 @@ public class UserController {
     @PreAuthorize("hasAnyRole('USER','COLLECTOR','ADMIN')")
     @Operation(
             summary = "Update password for logged user",
-            description = "Changes the password of the currently authenticated user. Password must be at least 8 characters, with uppercase, lowercase, number, and special character.",
+            description = "Changes the password of the currently authenticated user. Password must meet security criteria.",
             responses = {
                     @ApiResponse(responseCode = "204", description = "Password updated successfully"),
-                    @ApiResponse(responseCode = "400", description = "Invalid old password or new password does not meet criteria"),
+                    @ApiResponse(responseCode = "400", description = "Invalid old password or weak new password"),
                     @ApiResponse(responseCode = "403", description = "Access denied"),
                     @ApiResponse(responseCode = "404", description = "User not found"),
-                    @ApiResponse(responseCode = "429", description = "Too many password change attempts, try later")
+                    @ApiResponse(responseCode = "429", description = "Too many password change attempts")
             }
     )
-    public void updatePassword(
-            @AuthenticationPrincipal User user,
-            @Valid @RequestBody PasswordUpdateDTO dto
-    ) {
-        userService.updatePassword(user.getId(), dto.oldPassword(), dto.newPassword());
-        // TODO: Implement rate limiting for password update attempts
+    public void updatePassword(@Valid @RequestBody PasswordUpdateDTO dto) {
+        userService.updatePassword(dto.oldPassword(), dto.newPassword());
     }
 
     // ===============================================================

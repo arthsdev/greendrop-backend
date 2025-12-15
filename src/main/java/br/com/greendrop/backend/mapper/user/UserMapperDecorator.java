@@ -1,4 +1,4 @@
-package br.com.greendrop.backend.mapper;
+package br.com.greendrop.backend.mapper.user;
 
 import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.dto.user.UserRequestDTO;

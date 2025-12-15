@@ -13,6 +13,9 @@ import br.com.greendrop.backend.exception.user.DuplicateResourceException;
 import br.com.greendrop.backend.exception.user.ResourceNotFoundException;
 import br.com.greendrop.backend.infrastructure.security.jwt.JwtService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.util.UUID;
 
+/**
+ * Authentication service handling register, login, refresh and logout flows.
+ */
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -31,7 +37,7 @@ public class AuthService {
     private final UserRateLimitService userRateLimitService;
     private final UserCacheService userCacheService;
 
-    // Time-to-live of the access token
+    // Access token duration
     private static final Duration ACCESS_TOKEN_TTL = Duration.ofMinutes(15);
 
     // ============================================================
@@ -39,15 +45,13 @@ public class AuthService {
     // ============================================================
     @Transactional
     public AuthTokens register(UserRequestDTO request) {
-        // Validate email uniqueness and password strength
+
         validateEmailNotUsed(request.email());
         validatePasswordStrength(request.password());
 
-        // Build user entity and save
         User user = createUserFromRequest(request);
         userRepository.save(user);
 
-        // Issue tokens for the new user
         return issueAuthTokens(user);
     }
 
@@ -58,19 +62,13 @@ public class AuthService {
     public AuthTokens login(String email, String password) {
         User user = findActiveUserByEmail(email);
 
-        // Rate limit check
         validateRateLimit(user);
-
-        // Validate password
         validatePassword(password, user.getPassword());
 
-        // Clear failed attempts cache
         resetLoginAttempts(user.getId().toString());
 
-        // Revoke all previous tokens for this user
         tokenService.deleteAllUserTokens(user.getId().toString());
 
-        // Issue new tokens
         return issueAuthTokens(user);
     }
 
@@ -79,17 +77,16 @@ public class AuthService {
     // ============================================================
     @Transactional
     public AuthTokens refresh(String oldRefreshToken) {
+
         validateRefreshTokenExists(oldRefreshToken);
         validateRefreshTokenIntegrity(oldRefreshToken);
 
         UUID userId = extractUserId(oldRefreshToken);
         User user = findActiveUserById(userId);
 
-        // Revoke old refresh token
         tokenService.revokeToken(oldRefreshToken);
         tokenService.blacklistToken(oldRefreshToken);
 
-        // Return new access + refresh token
         return issueAuthTokens(user);
     }
 
@@ -107,9 +104,10 @@ public class AuthService {
     // ============================================================
     // PRIVATE HELPERS
     // ============================================================
-
     private void validateEmailNotUsed(String email) {
-        if (userRepository.existsByEmail(email)) throw new DuplicateResourceException();
+        if (userRepository.existsByEmail(email)) {
+            throw new DuplicateResourceException();
+        }
     }
 
     private void validateRateLimit(User user) {
@@ -135,14 +133,23 @@ public class AuthService {
     }
 
     private void validatePassword(String raw, String encoded) {
-        if (!passwordEncoder.matches(raw, encoded)) throw new InvalidCredentialsException();
+        if (!passwordEncoder.matches(raw, encoded)) {
+            throw new InvalidCredentialsException();
+        }
     }
 
     private void validateRefreshTokenExists(String token) {
-        if (token == null || token.isBlank()) throw new MissingTokenException();
+        if (token == null || token.isBlank()) {
+            throw new MissingTokenException();
+        }
     }
 
     private void validateRefreshTokenIntegrity(String token) {
+
+        if (!"refresh".equals(jwtService.extractType(token))) {
+            throw new InvalidTokenException();
+        }
+
         if (!jwtService.validateToken(token) || !tokenService.isTokenValid(token)) {
             throw new InvalidTokenException();
         }
@@ -179,25 +186,83 @@ public class AuthService {
     }
 
     private void validatePasswordStrength(String password) {
-        if (password == null || password.length() < 8) throw new InvalidCredentialsException();
+        if (password == null || password.length() < 8) {
+            throw new InvalidCredentialsException();
+        }
     }
 
     // ============================================================
-    // TOKEN FACTORY
+    // TOKEN ISSUING
     // ============================================================
     private AuthTokens issueAuthTokens(User user) {
+
         String access = jwtService.generateAccessToken(user);
         String refresh = jwtService.generateRefreshToken(user);
+
         tokenService.saveTokens(user.getId(), access, refresh);
 
         long expiresInSeconds = ACCESS_TOKEN_TTL.toSeconds();
 
-        // Return both tokens, expiration, and user info
         return new AuthTokens(
                 access,
                 refresh,
                 expiresInSeconds,
                 buildUserResponse(user)
         );
+    }
+
+
+    // ============================================================
+    // CONTEXT HELPERS (ADDED)
+    // ============================================================
+
+    /**
+     * Returns authenticated user ID (or null if not authenticated).
+     */
+    public UUID getCurrentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal().equals("anonymousUser")) {
+            return null;
+        }
+
+        UserDetails userDetails = (UserDetails) auth.getPrincipal();
+        return fetchUserIdFromUserDetails(userDetails);
+    }
+
+    /**
+     * Returns authenticated User. Throws if unauthenticated.
+     */
+    public User getCurrentUser() {
+        UUID id = getCurrentUserId();
+        if (id == null) throw new UnauthorizedException();
+
+        return userRepository.findById(id)
+                .orElseThrow(UnauthorizedException::new);
+    }
+
+    /**
+     * Returns true if user is ADMIN.
+     */
+    public boolean isCurrentUserAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal().equals("anonymousUser")) {
+            return false;
+        }
+
+        return auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+    }
+
+    /**
+     * Extracts userId from UserDetails (email→User).
+     */
+    private UUID fetchUserIdFromUserDetails(UserDetails details) {
+        String email = details.getUsername();
+
+        return userRepository.findByEmail(email)
+                .map(User::getId)
+                .orElse(null);
     }
 }
