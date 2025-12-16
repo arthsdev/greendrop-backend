@@ -2,12 +2,11 @@ package br.com.greendrop.backend.infrastructure.security.service;
 
 import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.domain.repository.UserRepository;
-import br.com.greendrop.backend.exception.auth.InvalidTokenException;
 import br.com.greendrop.backend.exception.auth.MissingTokenException;
 import br.com.greendrop.backend.exception.user.ResourceNotFoundException;
-import br.com.greendrop.backend.infrastructure.security.jwt.JwtService;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -16,46 +15,53 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CurrentUserService {
 
-    private final JwtService jwtService;
     private final UserRepository userRepository;
-    private final HttpServletRequest request;
 
-    // ============================================================
-    // INTERNAL – EXTRACT RAW TOKEN FROM REQUEST HEADER
-    // ============================================================
-    private String extractRawToken() {
-        String authHeader = request.getHeader("Authorization");
+    /**
+     * Gets the current Authentication from Spring Security Context.
+     * Ensures there is an authenticated user.
+     */
+    private Authentication getAuthentication() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (auth == null || !auth.isAuthenticated()) {
             throw new MissingTokenException();
         }
 
-        String token = authHeader.substring(7);
+        return auth;
+    }
 
-        if (!jwtService.validateToken(token)) {
-            throw new InvalidTokenException();
+    /**
+     * Extracts the current user's ID from Authentication Principal.
+     * JwtAuthenticationFilter should place the userId as the principal.
+     */
+    public UUID getCurrentUserId() {
+        Authentication auth = getAuthentication();
+        return UUID.fromString(auth.getName()); // principal should be userId
+    }
+
+    /**
+     * Extracts current user's email from Authentication details or token claims.
+     * JwtAuthenticationFilter should set this inside auth.getDetails()
+     */
+    public String getCurrentUserEmail() {
+        Authentication auth = getAuthentication();
+
+        if (auth.getDetails() instanceof String email) {
+            return email;
         }
 
-        return token;
+        // If you plan to store the email differently, adjust here.
+        throw new MissingTokenException();
     }
 
-    // ============================================================
-    // PUBLIC UTILITIES
-    // ============================================================
-
-    public UUID getCurrentUserId() {
-        String token = extractRawToken();
-        return UUID.fromString(jwtService.extractUserId(token));
-    }
-
-    public String getCurrentUserEmail() {
-        return jwtService.extractEmail(extractRawToken());
-    }
-
+    /**
+     * Loads the User domain entity using the authenticated user ID.
+     */
     public User getCurrentUser() {
-        UUID id = getCurrentUserId();
+        UUID userId = getCurrentUserId();
 
-        return userRepository.findById(id)
+        return userRepository.findById(userId)
                 .orElseThrow(ResourceNotFoundException::new);
     }
 }

@@ -14,6 +14,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Represents an application user.
+ * Implements Spring Security's UserDetails contract.
+ */
 @Entity
 @Table(name = "users")
 @Getter
@@ -38,7 +42,7 @@ public class User implements UserDetails {
     @Email
     private String email;
 
-    @Column(nullable = false)
+    @Column(name = "password_hash", nullable = false)
     @NotBlank
     private String password;
 
@@ -58,6 +62,7 @@ public class User implements UserDetails {
     // ---------------------------
     // UserDetails Implementation
     // ---------------------------
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));

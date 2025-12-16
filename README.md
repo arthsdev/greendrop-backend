@@ -13,133 +13,195 @@ Boot](https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F?logo=springboot)
 
 ## 📦 Overview
 
-**GreenDrop** is a backend REST API built with **Spring Boot + Java
-17**, supporting:
+**GreenDrop** is a backend REST API built with **Spring Boot + Java 17**, designed to support a scalable and secure platform for product collection and routing management.
 
--   JWT Authentication (access + refresh tokens)
--   HttpOnly refresh-token cookie
--   User roles (USER, COLLECTOR, ADMIN)
--   Product management module
--   Redis caching for:
-    -   User profiles (User Cache)
-    -   Token blacklist
-    -   Rate limiter buckets
--   Global Rate Limiting user
--   Dockerized development environment
+Main goals of the project:
+
+- Secure authentication with JWT (access + refresh)
+- Clear separation of responsibilities (Users, Products, Routes)
+- Internationalized error handling (i18n)
+- Redis-backed performance and security features
+- Docker-first development experience
 
 ------------------------------------------------------------------------
 
-## 🚀 Features
+## 🏗 Architecture Highlights
 
-### ✔ User Cache (Redis)
+The project follows **clean, layered architecture**, aligned with real-world backend standards:
 
--   Reduces database load
--   Cache invalidation on updates
--   Full serialization with Jackson
--   Prevents repeated queries on endpoints such as `/me` and
-    `/users/{id}`
+- **Controller layer** — REST endpoints & request validation
+- **Service layer** — business rules and orchestration
+- **Repository layer** — database access (JPA / Hibernate)
+- **DTOs** — strict input/output contracts
+- **Global exception handling** — standardized API errors
+- **Spring Security filter chain** — authentication & authorization
 
-### ✔ Global Rate Limiting
+Key architectural decisions:
 
--   Distributed rate limiter using Redis
--   Blocks abusive clients
--   Logs violations
--   Safe for horizontal scaling
-
-### ✔ Secure Refresh Token
-
--   Stored in **HttpOnly cookie**
--   Fully compatible with Docker + Prod profile
--   Auto-regenerated on each refresh
--   Protected from JavaScript access
+- Stateless authentication with JWT
+- Redis as a shared infrastructure dependency
+- Clear separation between domain errors and HTTP concerns
 
 ------------------------------------------------------------------------
 
-## 🔐 Authentication / Authorization
+## 🔐 Authentication & Security
 
-### Login
+Authentication is implemented using **JWT with access and refresh tokens**.
 
-`POST /api/auth/login`
-
-``` json
-{
-  "email": "user@example.com",
-  "password": "123456"
-}
-```
-
-Response:
-
-``` json
-{
-  "accessToken": "jwt_access_token"
-}
-```
-
-Refresh token is provided via **HttpOnly cookie**.
-
-------------------------------------------------------------------------
+### Access Token
+- Short-lived
+- Sent via `Authorization: Bearer <token>`
+- Used to authorize protected endpoints
 
 ### Refresh Token
+- Stored in **HttpOnly cookie**
+- Automatically rotated on refresh
+- Blacklisted on logout
+- Protected against XSS access
 
-`POST /api/auth/refresh`
-
--   Reads refresh token from HttpOnly cookie\
--   Validates blacklist\
--   Issues a **new access token**\
--   Refresh token is rotated (new cookie each refresh)
+### Supported flows
+- Login
+- Refresh token rotation
+- Logout with token invalidation
+- Endpoint-level authorization
 
 ------------------------------------------------------------------------
 
-### Logout
+## 🌍 Internationalization (i18n)
 
-`POST /api/auth/logout`
+The API supports **internationalized error messages** using Spring’s `MessageSource`.
 
--   Removes user tokens from active token cache\
--   Adds tokens to blacklist\
--   Clears HttpOnly cookie
+Highlights:
+
+- Error messages resolved via `messages_*.properties`
+- Locale resolved from request context
+- Fallback mechanism for missing keys
+- Unified error payload structure
+
+Example:
+
+```json
+{
+  "status": 401,
+  "code": "INVALID_CREDENTIALS",
+  "message": "Invalid credentials.",
+  "path": "/api/auth/login",
+  "timestamp": "2025-12-14T10:23:56"
+}
+```
+
+Supported locales:
+
+- pt_BR
+
+- en_US
+
+- es_ES
+
+------------------------------------------------------------------------
+
+### 👤 Users
+
+User management includes:
+
+- User registration
+- Authentication
+- Profile retrieval (`/me`)
+- Profile update
+- Password change
+- Role-based access control
+
+Security rules:
+- Users can only access or modify their own data
+- Admin-only operations enforced via Spring Security
+
+------------------------------------------------------------------------
+
+### 📦 Products
+
+The Products module supports:
+
+- Product creation by authenticated users
+- Ownership-based access control
+- Listing products belonging to the logged-in user (`/api/products/me`)
+- Image validation
+- Category-based restrictions
+
+Current guarantees:
+- A user cannot modify or delete another user's product
+- Proper HTTP semantics (401 vs 403)
+- Validation errors mapped to structured responses
+
+
+------------------------------------------------------------------------
+### 🚚 Collector Routes
+
+Collector Routes manage collection workflows:
+
+- Route creation with validation rules
+- Assignment to collectors
+- Controlled lifecycle (start / finish)
+- Stop ordering validation
+- Domain-driven error handling
+
+All route rules are enforced at the service layer to ensure consistency.
 
 ------------------------------------------------------------------------
 
 ## ⚡ Rate Limiting
 
-### Global policy:
+The API includes **Redis-backed rate limiting**.
 
--   **X requests/minute** (configurable)
--   Based on Redis buckets
+Characteristics:
 
-Returns **429 Too Many Requests**:
+- Distributed (safe for horizontal scaling)
+- Per-user request limits
+- Configurable window and max requests
+- Automatic blocking with HTTP `429`
 
-``` json
+Example response:
+
+```json
 {
-  "error": "Rate limit exceeded. Try again later."
+  "status": 429,
+  "code": "USER_TOO_MANY_ATTEMPTS",
+  "message": "Too many attempts. Try again in a few minutes."
 }
 ```
-
-------------------------------------------------------------------------
-
-## 👤 User Endpoints
-
--   `GET /api/users/me`
--   `PUT /api/users/me`
--   `PUT /api/users/me/password`
--   `GET /api/users`
--   `GET /api/users/{id}`
--   `DELETE /api/users/{id}`
-
 ------------------------------------------------------------------------
 
 ## 🐳 Docker & Environment
 
-### Start full environment
+The entire stack is Dockerized for consistency.
 
-``` sh
+Services:
+
+- Spring Boot API
+- MySQL 8
+- Redis
+
+Start everything:
+
+```
 docker compose up --build
 ```
 
-Services: - Spring API\
-- MySQL\
-- Redis
+------------------------------------------------------------------------
+
+## 📘 API Documentation
+
+The API is fully documented using **Swagger / OpenAPI 3**.
+
+Access Swagger UI:
+
+[http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+
+Documentation includes:
+
+- Endpoint descriptions
+- Request/response schemas
+- Error responses
+- Authentication requirements
 
 ------------------------------------------------------------------------
 
@@ -169,27 +231,16 @@ Create `.env` file:
 
 ------------------------------------------------------------------------
 
-## 🧪 Local Development
+## 🛣 Roadmap
 
-Run MySQL + Redis:
+Planned improvements and next features:
 
-``` sh
-docker compose up db redis
-```
-
-Run API:
-
-``` sh
-./gradlew bootRun
-```
-
-------------------------------------------------------------------------
-
-## 📘 API Documentation
-
-Swagger UI:
-
-    http://localhost:8080/swagger-ui.html
+- JWT claims for roles and permissions
+- Pagination for `/me/products`
+- Soft delete (logical deletion flags)
+- Auditing fields (`createdAt`, `createdBy`)
+- Rate limiting per user (fine-grained)
+- Expanded Swagger error documentation
 
 ------------------------------------------------------------------------
 

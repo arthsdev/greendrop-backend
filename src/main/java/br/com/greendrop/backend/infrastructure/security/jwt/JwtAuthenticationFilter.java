@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -73,33 +72,60 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * Lightweight validation to determine if a token should proceed to authentication.
      */
     private boolean isTokenUsable(String token) {
-        return token != null
-                && jwtService.validateToken(token)               // signature + expiration
-                && !"refresh".equals(jwtService.extractType(token))  // ensure ACCESS token
-                && !tokenService.isTokenRevoked(token);          // blacklist
+        if (token == null) return false;
+
+        // Validate signature + expiration
+        if (!jwtService.validateToken(token)) return false;
+
+        // Safely extract type
+        String type;
+        try {
+            type = jwtService.extractType(token);
+        } catch (Exception e) {
+            return false; // invalid token → ignore silently
+        }
+
+        // Only ACCESS tokens should authenticate
+        if ("refresh".equals(type)) return false;
+
+        // Check revocation (blacklist)
+        return !tokenService.isRefreshTokenValid(token);
     }
 
     private void authenticate(String token, HttpServletRequest request) {
+
         String email = jwtService.extractEmail(token);
-        if (email == null) return;
+        String userId = jwtService.extractUserId(token);
+
+        if (email == null || userId == null) return;
 
         // Avoid overriding context if already authenticated
         if (SecurityContextHolder.getContext().getAuthentication() != null) return;
 
         UserDetails user = userDetailsService.loadUserByUsername(email);
 
-        // Validate ownership (token must belong to same user)
         if (!jwtService.isTokenValid(token, user)) return;
 
         UsernamePasswordAuthenticationToken auth =
                 new UsernamePasswordAuthenticationToken(
-                        user,
-                        token,                 // raw token kept as credentials
+                        userId,          // <-- principal (String userId)
+                        null,            // we no longer keep raw token here
                         user.getAuthorities()
                 );
 
-        auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        auth.setDetails(email); //  store email here
 
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+
+        return path.startsWith("/api/auth/")
+                || path.startsWith("/v3/api-docs")
+                || path.startsWith("/swagger-ui");
+    }
+
+
 }

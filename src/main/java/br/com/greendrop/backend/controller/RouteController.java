@@ -1,7 +1,7 @@
 package br.com.greendrop.backend.controller;
 
 import br.com.greendrop.backend.domain.model.enums.RouteStatus;
-import br.com.greendrop.backend.domain.service.RouteService;
+import br.com.greendrop.backend.domain.service.route.RouteService;
 import br.com.greendrop.backend.dto.route.RouteCreateDTO;
 import br.com.greendrop.backend.dto.route.RouteResponseDTO;
 import br.com.greendrop.backend.dto.route.RouteStopDTO;
