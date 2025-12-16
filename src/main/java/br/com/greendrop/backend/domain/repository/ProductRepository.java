@@ -20,4 +20,6 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
 
     Page<Product> findByStatus(ProductStatus status, Pageable pageable);
 
+    List<Product> findByPostedByIdAndStatusNot(UUID postedById, ProductStatus status);
+
 }

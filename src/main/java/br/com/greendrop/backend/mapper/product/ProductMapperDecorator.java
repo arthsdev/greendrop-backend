@@ -46,4 +46,3 @@ public abstract class ProductMapperDecorator implements ProductMapper {
 
     // TODO: add custom mapping logic here when needed
 }
-

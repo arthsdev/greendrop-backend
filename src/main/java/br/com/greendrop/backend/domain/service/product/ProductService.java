@@ -207,10 +207,11 @@ public class ProductService {
     public List<ProductResponseDTO> getMyProducts() {
         UUID userId = currentUserService.getCurrentUserId();
 
-        return productRepository.findByPostedById(userId)
+        return productRepository
+                .findByPostedByIdAndStatusNot(userId, ProductStatus.DELETED)
                 .stream()
                 .map(productMapper::toResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     // ========================================================================

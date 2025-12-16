@@ -2,6 +2,7 @@ package br.com.greendrop.backend.dto.product;
 
 import br.com.greendrop.backend.domain.model.enums.ProductCategory;
 import jakarta.validation.constraints.*;
+
 import java.util.List;
 
 /**
@@ -30,9 +31,6 @@ public record ProductCreateDTO(
 
         @NotNull(message = "Image list cannot be null")
         @Size(min = 1, message = "At least one image URL must be provided")
-        List<
-                @NotBlank(message = "Image URL cannot be blank")
-                        String
-                > imageUrls
+        List<@NotBlank(message = "Image URL cannot be blank") String> imageUrls
 
 ) {}

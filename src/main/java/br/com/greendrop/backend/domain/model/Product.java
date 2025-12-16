@@ -12,13 +12,9 @@ import java.util.UUID;
 
 /**
  * Represents a product listed by a user.
- * A product may optionally be linked to a RouteStop.
- *
- * <p>The relationship is owned by RouteStop. This entity does not
- * contain the foreign key but can reference the stop through mappedBy.</p>
  */
 @Entity
-@Table(name = "products")
+@Table(name = "product")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -27,16 +23,16 @@ import java.util.UUID;
 public class Product {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(columnDefinition = "BINARY(16)")
     private UUID id;
 
     @Column(nullable = false)
     private String title;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(nullable = false)
+    @Column(name = "weight_kg", nullable = false)
     private Double weightKg;
 
     @Column(nullable = false)
@@ -50,36 +46,41 @@ public class Product {
     @Column(nullable = false)
     private ProductStatus status;
 
+    /** User who posted the product */
     @ManyToOne(optional = false)
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", columnDefinition = "BINARY(16)")
     private User postedBy;
 
-    /** List of images belonging to this product */
+    /** Images belonging to this product */
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("createdAt ASC")
     @Builder.Default
     private List<ProductImage> images = new ArrayList<>();
 
-    /** Optional one-to-one reference from RouteStop */
+    /** Optional route stop that references this product */
     @OneToOne(mappedBy = "product")
     private RouteStop routeStop;
 
-    /* TIMESTAMPS */
-    @Column(nullable = false, updatable = false)
+    /* Timestamps */
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(nullable = false)
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     @PrePersist
     public void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-        this.status = ProductStatus.PENDING;
+        if (id == null) {
+            id = UUID.randomUUID();
+        }
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+        if (status == null) {
+            status = ProductStatus.PENDING;
+        }
     }
 
     @PreUpdate
     public void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
     }
 }

@@ -17,8 +17,8 @@ public class LocaleConfig {
         // Default language when Accept-Language is not provided - EN
         //resolver.setDefaultLocale(Locale.ENGLISH);
 
-         //PT-BR as default:
-         resolver.setDefaultLocale(new Locale("pt", "BR"));
+        //PT-BR as default:
+        resolver.setDefaultLocale(new Locale("pt", "BR"));
 
         return resolver;
     }
