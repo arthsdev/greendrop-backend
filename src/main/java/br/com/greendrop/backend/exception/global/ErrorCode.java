@@ -14,6 +14,12 @@ public enum ErrorCode {
     MISSING_TOKEN("MISSING_TOKEN", "error.missing_token", HttpStatus.BAD_REQUEST),
     PASSWORD_INVALID("PASSWORD_INVALID", "error.password_invalid", HttpStatus.BAD_REQUEST),
     INVALID_SECRET_KEY("INVALID_SECRET_KEY", "error.invalid_secret_key", HttpStatus.BAD_REQUEST),
+    PRODUCT_ALREADY_ASSIGNED_TO_ROUTE("PRODUCT_ALREADY_ASSIGNED_TO_ROUTE",
+            "error.product_already_assigned_to_route", HttpStatus.BAD_REQUEST),
+    PRODUCT_ALREADY_CLAIMED("PRODUCT_ALREADY_CLAIMED", "error.product_already_claimed", HttpStatus.BAD_REQUEST),
+    PRODUCT_NOT_AVAILABLE_FOR_CLAIM("PRODUCT_NOT_AVAILABLE_FOR_CLAIM",
+            "error.product_not_available_for_claim", HttpStatus.BAD_REQUEST),
+
 
     // Route domain (400)
     ROUTE_START_COLLECTOR_REQUIRED("ROUTE_START_COLLECTOR_REQUIRED", "route.start.collector_required", HttpStatus.BAD_REQUEST),

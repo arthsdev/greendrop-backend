@@ -1,7 +1,9 @@
 package br.com.greendrop.backend.controller;
 
+import br.com.greendrop.backend.domain.model.Product;
 import br.com.greendrop.backend.domain.model.enums.ProductCategory;
 import br.com.greendrop.backend.domain.model.enums.ProductStatus;
+import br.com.greendrop.backend.domain.service.product.ProductClaimService;
 import br.com.greendrop.backend.domain.service.product.ProductService;
 import br.com.greendrop.backend.dto.product.*;
 
@@ -41,6 +43,7 @@ import java.util.UUID;
 public class ProductController {
 
     private final ProductService productService;
+    private final ProductClaimService productClaimService;
 
     // =============================================================
     // CREATE PRODUCT
@@ -308,6 +311,58 @@ public class ProductController {
     ) {
         return ResponseEntity.ok(productService.update(id, dto));
     }
+
+    // =============================================================
+    // CLAIM PRODUCT
+    // =============================================================
+    @PostMapping("/{id}/claim")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(
+            summary = "Claim a product for collection",
+            description = """
+            Allows a collector to claim a product for collection.
+
+            Rules:
+            - Only users with COLLECTOR role can claim
+            - Product must be in PENDING status
+            - Product cannot be claimed by its own creator
+            - Product cannot already be claimed or assigned to a route
+            """
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Product successfully claimed"
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Product not available for claim or already claimed",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "User is not allowed to claim this product",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Product not found",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class)
+                    )
+            )
+    })
+    public ResponseEntity<ProductResponseDTO> claim(@PathVariable UUID id) {
+        return ResponseEntity.ok(productClaimService.claim(id));
+    }
+
 
     // =============================================================
     // DELETE PRODUCT

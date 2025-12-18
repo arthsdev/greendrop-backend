@@ -16,7 +16,6 @@ import java.util.UUID;
 @Entity
 @Table(name = "product")
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -46,6 +45,14 @@ public class Product {
     @Column(nullable = false)
     private ProductStatus status;
 
+    /** Collector who claimed this product */
+    @ManyToOne
+    @JoinColumn(name = "claimed_by_id", columnDefinition = "BINARY(16)")
+    private User claimedBy;
+
+    @Column(name = "assigned_at")
+    private LocalDateTime assignedAt;
+
     /** User who posted the product */
     @ManyToOne(optional = false)
     @JoinColumn(name = "user_id", columnDefinition = "BINARY(16)")
@@ -67,6 +74,39 @@ public class Product {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    public void claimBy(User collector) {
+
+        if (this.status != ProductStatus.PENDING) {
+            throw new IllegalStateException("Product is not available for claim");
+        }
+
+        if (this.claimedBy != null) {
+            throw new IllegalStateException("Product is already claimed");
+        }
+
+        this.claimedBy = collector;
+        this.assignedAt = LocalDateTime.now();
+        this.status = ProductStatus.ASSIGNED;
+    }
+
+    public void postBy(User user) {
+        this.postedBy = user;
+        this.status = ProductStatus.PENDING;
+    }
+
+    public void replaceImages(List<ProductImage> images) {
+        this.images.clear();
+        if (images != null) {
+            images.forEach(image -> image.setProduct(this));
+            this.images.addAll(images);
+        }
+    }
+
+    public void markAsDeleted() {
+        this.status = ProductStatus.DELETED;
+    }
+
+
     @PrePersist
     public void onCreate() {
         if (id == null) {
@@ -74,6 +114,7 @@ public class Product {
         }
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+
         if (status == null) {
             status = ProductStatus.PENDING;
         }

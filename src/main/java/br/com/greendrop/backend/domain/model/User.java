@@ -47,6 +47,7 @@ public class User implements UserDetails {
     private String password;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Role role;
 
     private String cep;
@@ -88,8 +89,36 @@ public class User implements UserDetails {
         return true;
     }
 
+
     @Override
     public boolean isEnabled() {
         return active;
     }
+
+    public boolean hasRole(Role role) {
+        return this.role == role;
+    }
+
+    public boolean isCollector() {
+        return this.role == Role.COLLECTOR;
+    }
+
+    public boolean isAdmin() {
+        return this.role == Role.ADMIN;
+    }
+
+    public boolean isRegularUser() {
+        return this.role == Role.USER;
+    }
+
+
+    //TODO: Remove SETTER for security purposes
+
+//    public void changeRole(Role newRole) {
+//        this.role = newRole;
+//    }
+//
+//    public void deactivate() {
+//        this.active = false;
+//    }
 }
