@@ -3,6 +3,7 @@ package br.com.greendrop.backend.domain.service.product.rules;
 import br.com.greendrop.backend.domain.model.Product;
 import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.domain.model.enums.ProductCategory;
+import br.com.greendrop.backend.domain.model.enums.ProductStatus;
 import br.com.greendrop.backend.domain.model.enums.Role;
 import br.com.greendrop.backend.exception.generic.BusinessException;
 import br.com.greendrop.backend.exception.global.ErrorCode;
@@ -86,5 +87,41 @@ public class ProductRules {
                 throw new BusinessException(ErrorCode.INVALID_CATEGORY_FOR_ROLE);
         }
     }
+
+    /**
+     * Ensures that a product can be claimed by a collector.
+     *
+     * <p>This method validates the product state only.
+     * Authorization (who is claiming) must be handled elsewhere.</p>
+     *
+     * @param product Product to be claimed
+     * @throws BusinessException if the product cannot be claimed
+     */
+    public void ensureCanBeClaimed(Product product) {
+
+        if (product == null) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        // Product must be pending
+        if (product.getStatus() != ProductStatus.PENDING) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_AVAILABLE_FOR_CLAIM);
+        }
+
+        // Product must not be already claimed
+        if (product.getClaimedBy() != null) {
+            throw new BusinessException(ErrorCode.PRODUCT_ALREADY_CLAIMED);
+        }
+
+        // Product must not be linked to a route
+        if (product.getRouteStop() != null) {
+            throw new BusinessException(ErrorCode.PRODUCT_ALREADY_ASSIGNED_TO_ROUTE);
+        }
+
+        // 🚀 Future rules:
+        // - time window validation
+        // - distance (km radius)
+    }
+
 
 }

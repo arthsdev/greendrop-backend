@@ -4,6 +4,7 @@ import br.com.greendrop.backend.domain.model.Product;
 import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.domain.model.enums.Role;
 import br.com.greendrop.backend.exception.auth.ForbiddenException;
+import br.com.greendrop.backend.exception.generic.BusinessException;
 import br.com.greendrop.backend.exception.global.ErrorCode;
 import org.springframework.stereotype.Component;
 
@@ -44,4 +45,22 @@ public class ProductAuthorization {
             throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
         }
     }
+
+    /**
+     * Validates whether a user is authorized to claim a product.
+     * This method performs authorization checks related to the user identity
+     * and role. It does NOT validate the product state (status, routing, time
+     * or distance rules)
+     */
+    public void checkCanClaimProduct(User user, Product product) {
+
+        if (!user.isCollector()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        if (product.getPostedBy().getId().equals(user.getId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
 }

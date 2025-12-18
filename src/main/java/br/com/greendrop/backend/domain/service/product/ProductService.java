@@ -72,16 +72,15 @@ public class ProductService {
 
         // Map and enrich
         Product product = productMapper.toEntity(dto);
-        product.setPostedBy(user);
-        product.setStatus(ProductStatus.PENDING);
+        product.postBy(user);
 
-        // Attach images (defensive copy)
         if (dto.imageUrls() != null && !dto.imageUrls().isEmpty()) {
             List<ProductImage> images = dto.imageUrls().stream()
                     .filter(Objects::nonNull)
-                    .map(url -> ProductImage.builder().url(url).product(product).build())
-                    .collect(Collectors.toList());
-            product.setImages(images);
+                    .map(url -> ProductImage.builder().url(url).build())
+                    .toList();
+
+            product.replaceImages(images);
         }
 
         productRepository.save(product);
@@ -135,14 +134,13 @@ public class ProductService {
         // Apply partial update (MapStruct decorator configured to IGNORE nulls)
         productMapper.updateEntityFromDTO(dto, product);
 
-        // Replace images only when dto.imageUrls provided (explicit replace)
         if (dto.imageUrls() != null) {
-            product.getImages().clear();
-            dto.imageUrls().stream()
+            List<ProductImage> images = dto.imageUrls().stream()
                     .filter(Objects::nonNull)
-                    .forEach(url -> product.getImages().add(
-                            ProductImage.builder().url(url).product(product).build()
-                    ));
+                    .map(url -> ProductImage.builder().url(url).build())
+                    .toList();
+
+            product.replaceImages(images);
         }
 
         productRepository.save(product);
@@ -163,7 +161,7 @@ public class ProductService {
         authorization.checkOwnershipOrAdmin(product, current);
         rules.ensureNotLinkedForDelete(product);
 
-        product.setStatus(ProductStatus.DELETED);
+        product.markAsDeleted();
         productRepository.save(product);
 
         log.info("Product soft-deleted (id={} by={})", product.getId(), current.getId());
