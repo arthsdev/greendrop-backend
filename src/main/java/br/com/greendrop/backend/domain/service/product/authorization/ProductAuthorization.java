@@ -63,4 +63,12 @@ public class ProductAuthorization {
         }
     }
 
+
+    //TODO Javadoc with properly description
+    public void checkCanUnclaim(Product product, User user) {
+        if (!user.equals(product.getClaimedBy())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
 }
