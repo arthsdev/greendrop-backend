@@ -6,6 +6,7 @@ import br.com.greendrop.backend.dto.route.RouteCreateDTO;
 import br.com.greendrop.backend.dto.route.RouteResponseDTO;
 import br.com.greendrop.backend.dto.route.RouteStopDTO;
 import br.com.greendrop.backend.dto.route.RouteStopUpdateDTO;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "Routes", description = "Endpoints for Routes management")
 @RestController
 @RequestMapping("/api/routes")
 @RequiredArgsConstructor

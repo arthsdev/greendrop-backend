@@ -22,4 +22,7 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
 
     List<Product> findByPostedByIdAndStatusNot(UUID postedById, ProductStatus status);
 
+    List<Product> findByClaimedById(UUID userId);
+
+    List<Product> findByClaimedByIdAndStatus(UUID userId, ProductStatus status);
 }

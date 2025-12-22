@@ -67,6 +67,9 @@ public enum ErrorCode {
     // ===============================
     USER_EMAIL_ALREADY_EXISTS("USER_EMAIL_ALREADY_EXISTS", "error.user_email_already_exists", HttpStatus.CONFLICT),
     CONFLICT("CONFLICT", "error.conflict", HttpStatus.CONFLICT),
+    PRODUCT_NOT_CLAIMED("PRODUCT_NOT_CLAIMED", "error.product.not_claimed", HttpStatus.CONFLICT),
+    PRODUCT_ALREADY_ASSIGNED("PRODUCT_ALREADY_ASSIGNED", "error.product_already_assigned", HttpStatus.CONFLICT),
+    PRODUCT_NOT_ASSIGNED("PRODUCT_NOT_ASSIGNED", "error.product_not_assigned", HttpStatus.CONFLICT),
 
     // ===============================
     // 429 — Too Many Requests

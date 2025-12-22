@@ -5,6 +5,7 @@ import br.com.greendrop.backend.domain.model.ProductImage;
 import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.domain.model.enums.ProductCategory;
 import br.com.greendrop.backend.domain.model.enums.ProductStatus;
+import br.com.greendrop.backend.domain.model.enums.Role;
 import br.com.greendrop.backend.domain.repository.ProductRepository;
 import br.com.greendrop.backend.domain.service.product.authorization.ProductAuthorization;
 import br.com.greendrop.backend.domain.service.product.rules.ProductRules;
@@ -211,6 +212,24 @@ public class ProductService {
                 .map(productMapper::toResponse)
                 .toList();
     }
+
+    // ========================================================================
+// LIST CLAIMED PRODUCTS
+// ========================================================================
+    public List<ProductResponseDTO> getMyClaimedProducts() {
+
+        UUID collectorId = currentUserService.getCurrentUserId();
+
+        return productRepository
+                .findByClaimedByIdAndStatus(
+                        collectorId,
+                        ProductStatus.ASSIGNED
+                )
+                .stream()
+                .map(productMapper::toResponse)
+                .toList();
+    }
+
 
     // ========================================================================
     // Helpers

@@ -45,73 +45,123 @@ public class Product {
     @Column(nullable = false)
     private ProductStatus status;
 
+    // =====================================================
+    // Claim
+    // =====================================================
+
     /** Collector who claimed this product */
     @ManyToOne
     @JoinColumn(name = "claimed_by_id", columnDefinition = "BINARY(16)")
     private User claimedBy;
 
-    @Column(name = "assigned_at")
-    private LocalDateTime assignedAt;
+    /** Timestamp when product was claimed */
+    @Column(name = "claimed_at")
+    private LocalDateTime claimedAt;
+
+    // =====================================================
+    // Ownership
+    // =====================================================
 
     /** User who posted the product */
     @ManyToOne(optional = false)
     @JoinColumn(name = "user_id", columnDefinition = "BINARY(16)")
     private User postedBy;
 
+    // =====================================================
+    // Relations
+    // =====================================================
+
     /** Images belonging to this product */
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ProductImage> images = new ArrayList<>();
 
-    /** Optional route stop that references this product */
+    /** Route stop once product is assigned to logistics */
     @OneToOne(mappedBy = "product")
     private RouteStop routeStop;
 
-    /* Timestamps */
+    // =====================================================
+    // Audit
+    // =====================================================
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    // =====================================================
+    // Domain behavior
+    // =====================================================
+
+    /**
+     * Claims this product for collection.
+     */
     public void claimBy(User collector) {
-
-        if (this.status != ProductStatus.PENDING) {
-            throw new IllegalStateException("Product is not available for claim");
-        }
-
-        if (this.claimedBy != null) {
-            throw new IllegalStateException("Product is already claimed");
-        }
-
         this.claimedBy = collector;
-        this.assignedAt = LocalDateTime.now();
+        this.claimedAt = LocalDateTime.now();
         this.status = ProductStatus.ASSIGNED;
     }
 
+    /**
+     * Releases the claim and returns product to PENDING state.
+     */
+    public void unclaim() {
+        this.claimedBy = null;
+        this.claimedAt = null;
+        this.status = ProductStatus.PENDING;
+    }
+
+    /**
+     * Marks product as posted by a user.
+     * Initial state is always PENDING.
+     */
     public void postBy(User user) {
         this.postedBy = user;
         this.status = ProductStatus.PENDING;
     }
 
+    /**
+     * Replaces all product images.
+     */
     public void replaceImages(List<ProductImage> images) {
         this.images.clear();
+
         if (images != null) {
             images.forEach(image -> image.setProduct(this));
             this.images.addAll(images);
         }
     }
 
+    /**
+     * Soft delete.
+     */
     public void markAsDeleted() {
         this.status = ProductStatus.DELETED;
     }
 
+    // =====================================================
+    // Derived state helpers
+    // =====================================================
+
+    public boolean isClaimed() {
+        return claimedBy != null;
+    }
+
+    public boolean isDeleted() {
+        return status == ProductStatus.DELETED;
+    }
+
+    // =====================================================
+    // JPA lifecycle
+    // =====================================================
 
     @PrePersist
-    public void onCreate() {
+    protected void onCreate() {
         if (id == null) {
             id = UUID.randomUUID();
         }
+
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
 
@@ -121,7 +171,7 @@ public class Product {
     }
 
     @PreUpdate
-    public void onUpdate() {
+    protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
 }

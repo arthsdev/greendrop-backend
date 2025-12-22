@@ -35,7 +35,9 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
 
+                        // =====================================================
                         // PUBLIC ENDPOINTS
+                        // =====================================================
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/v3/api-docs/**",
@@ -43,24 +45,50 @@ public class SecurityConfig {
                                 "/swagger-ui.html"
                         ).permitAll()
 
-                        .requestMatchers(HttpMethod.GET, "/api/products/me").authenticated()
+                        // =====================================================
+                        // PRODUCT CLAIM FLOW (COLLECTOR ONLY)
+                        // =====================================================
+                        .requestMatchers(HttpMethod.POST, "/api/products/*/claim")
+                        .hasRole("COLLECTOR")
 
-                        // GET products: only COLLECTOR and ADMIN
+                        .requestMatchers(HttpMethod.POST, "/api/products/*/unclaim")
+                        .hasRole("COLLECTOR")
+
+                        .requestMatchers(HttpMethod.GET, "/api/products/me/claims")
+                        .hasRole("COLLECTOR")
+
+                        // =====================================================
+                        // AUTHENTICATED USER CONTEXT
+                        // =====================================================
+                        .requestMatchers(HttpMethod.GET, "/api/products/me")
+                        .authenticated()
+
+                        // =====================================================
+                        // READ PRODUCTS
+                        // =====================================================
                         .requestMatchers(HttpMethod.GET, "/api/products/**")
                         .hasAnyRole("COLLECTOR", "ADMIN")
 
-                        // POST product: only USER and ADMIN (Collectors excluded)
+                        // =====================================================
+                        // CREATE PRODUCT
+                        // (Collectors are NOT allowed)
+                        // =====================================================
                         .requestMatchers(HttpMethod.POST, "/api/products/**")
                         .hasAnyRole("USER", "ADMIN")
 
-                        // UPDATE + DELETE: requires authentication (service checks owner/admin)
-                        .requestMatchers(HttpMethod.PATCH, "/api/products/**").authenticated()
-                        .requestMatchers(HttpMethod.DELETE, "/api/products/**").authenticated()
+                        // =====================================================
+                        // UPDATE / DELETE PRODUCT
+                        // (Ownership checked in service layer)
+                        // =====================================================
+                        .requestMatchers(HttpMethod.PATCH, "/api/products/**")
+                        .authenticated()
 
-                        // Homepage GET
-                        .requestMatchers(HttpMethod.GET, "/").permitAll()
+                        .requestMatchers(HttpMethod.DELETE, "/api/products/**")
+                        .authenticated()
 
-                        // EVERYTHING ELSE requires authentication
+                        // =====================================================
+                        // FALLBACK
+                        // =====================================================
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

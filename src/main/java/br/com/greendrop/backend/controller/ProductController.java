@@ -5,6 +5,7 @@ import br.com.greendrop.backend.domain.model.enums.ProductCategory;
 import br.com.greendrop.backend.domain.model.enums.ProductStatus;
 import br.com.greendrop.backend.domain.service.product.ProductClaimService;
 import br.com.greendrop.backend.domain.service.product.ProductService;
+import br.com.greendrop.backend.domain.service.product.ProductUnclaimService;
 import br.com.greendrop.backend.dto.product.*;
 
 import br.com.greendrop.backend.exception.model.ApiError;
@@ -44,6 +45,7 @@ public class ProductController {
 
     private final ProductService productService;
     private final ProductClaimService productClaimService;
+    private final ProductUnclaimService productUnclaimService;
 
     // =============================================================
     // CREATE PRODUCT
@@ -82,14 +84,14 @@ public class ProductController {
                                     examples = @ExampleObject(
                                             name = "ProductForbidden",
                                             value = """
-                                            {
-                                              "status": 403,
-                                              "code": "PRODUCT_FORBIDDEN",
-                                              "message": "Collectors are not allowed to create products.",
-                                              "path": "/api/products",
-                                              "timestamp": "2025-01-01T12:00:00"
-                                            }
-                                            """
+                                                    {
+                                                      "status": 403,
+                                                      "code": "PRODUCT_FORBIDDEN",
+                                                      "message": "Collectors are not allowed to create products.",
+                                                      "path": "/api/products",
+                                                      "timestamp": "2025-01-01T12:00:00"
+                                                    }
+                                                    """
                                     )
                             )
                     ),
@@ -136,14 +138,14 @@ public class ProductController {
                                     examples = @ExampleObject(
                                             name = "NotFoundExample",
                                             value = """
-                                            {
-                                              "status": 404,
-                                              "code": "PRODUCT_NOT_FOUND",
-                                              "message": "Product not found.",
-                                              "path": "/api/products/{id}",
-                                              "timestamp": "2025-01-01T12:00:00"
-                                            }
-                                            """
+                                                    {
+                                                      "status": 404,
+                                                      "code": "PRODUCT_NOT_FOUND",
+                                                      "message": "Product not found.",
+                                                      "path": "/api/products/{id}",
+                                                      "timestamp": "2025-01-01T12:00:00"
+                                                    }
+                                                    """
                                     )
                             )
                     )
@@ -218,9 +220,9 @@ public class ProductController {
     @Operation(
             summary = "List products created by the authenticated user",
             description = """
-                Returns all products created by the currently authenticated user.
-                The user ID is extracted from the JWT token and automatically used to filter the results.
-                """
+                    Returns all products created by the currently authenticated user.
+                    The user ID is extracted from the JWT token and automatically used to filter the results.
+                    """
     )
     @ApiResponses(value = {
             @ApiResponse(
@@ -237,15 +239,15 @@ public class ProductController {
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(example = """
-                                {
-                                  "timestamp": "2025-01-01T12:00:00",
-                                  "status": 401,
-                                  "error": "Unauthorized",
-                                  "message": "Invalid or missing JWT token",
-                                  "errorCode": "AUTH_401",
-                                  "path": "/api/products/me"
-                                }
-                                """)
+                                    {
+                                      "timestamp": "2025-01-01T12:00:00",
+                                      "status": 401,
+                                      "error": "Unauthorized",
+                                      "message": "Invalid or missing JWT token",
+                                      "errorCode": "AUTH_401",
+                                      "path": "/api/products/me"
+                                    }
+                                    """)
                     )
             ),
             @ApiResponse(
@@ -254,15 +256,15 @@ public class ProductController {
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(example = """
-                                {
-                                  "timestamp": "2025-01-01T12:00:00",
-                                  "status": 500,
-                                  "error": "Internal Server Error",
-                                  "message": "Unexpected server error",
-                                  "errorCode": "SERVER_500",
-                                  "path": "/api/products/me"
-                                }
-                                """)
+                                    {
+                                      "timestamp": "2025-01-01T12:00:00",
+                                      "status": 500,
+                                      "error": "Internal Server Error",
+                                      "message": "Unexpected server error",
+                                      "errorCode": "SERVER_500",
+                                      "path": "/api/products/me"
+                                    }
+                                    """)
                     )
             )
     })
@@ -270,6 +272,74 @@ public class ProductController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<ProductResponseDTO>> getMyProducts() {
         return ResponseEntity.ok(productService.getMyProducts());
+    }
+
+    // =============================================================
+    // LIST MY CLAIMED PRODUCTS
+    // =============================================================
+    @Operation(
+            summary = "List claimed products of the authenticated collector",
+            description = """
+                    Returns all products currently claimed by the authenticated collector.
+                    
+                    Rules:
+                    - Only users with COLLECTOR role can access this endpoint
+                    - Only products with ASSIGNED status are returned
+                    - Products linked to a route are included, since they are still claimed
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Claimed products successfully retrieved",
+                    content = @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(
+                                    schema = @Schema(implementation = ProductResponseDTO.class)
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "User not authenticated",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "User is not a collector",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class),
+                            examples = @ExampleObject(
+                                    name = "CollectorOnly",
+                                    value = """
+                                            {
+                                              "status": 403,
+                                              "code": "ACCESS_DENIED",
+                                              "message": "Only collectors can access this resource.",
+                                              "path": "/api/products/me/claims",
+                                              "timestamp": "2025-01-01T12:00:00"
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = "Internal server error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class)
+                    )
+            )
+    })
+    @GetMapping("/me/claims")
+    @PreAuthorize("hasRole('COLLECTOR')")
+    public ResponseEntity<List<ProductResponseDTO>> getMyClaimedProducts() {
+        return ResponseEntity.ok(productService.getMyClaimedProducts());
     }
 
     // =============================================================
@@ -289,14 +359,14 @@ public class ProductController {
                             content = @Content(schema = @Schema(implementation = ApiError.class),
                                     examples = @ExampleObject(
                                             value = """
-                                            {
-                                              "status": 409,
-                                              "code": "PRODUCT_CANNOT_UPDATE",
-                                              "message": "This product is linked to a routeStop and cannot be modified.",
-                                              "path": "/api/products/{id}",
-                                              "timestamp": "2025-01-01T12:00:00"
-                                            }
-                                            """
+                                                    {
+                                                      "status": 409,
+                                                      "code": "PRODUCT_CANNOT_UPDATE",
+                                                      "message": "This product is linked to a routeStop and cannot be modified.",
+                                                      "path": "/api/products/{id}",
+                                                      "timestamp": "2025-01-01T12:00:00"
+                                                    }
+                                                    """
                                     )
                             )
                     ),
@@ -316,18 +386,18 @@ public class ProductController {
     // CLAIM PRODUCT
     // =============================================================
     @PostMapping("/{id}/claim")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasRole('COLLECTOR')")
     @Operation(
             summary = "Claim a product for collection",
             description = """
-            Allows a collector to claim a product for collection.
-
-            Rules:
-            - Only users with COLLECTOR role can claim
-            - Product must be in PENDING status
-            - Product cannot be claimed by its own creator
-            - Product cannot already be claimed or assigned to a route
-            """
+                    Allows a collector to claim a product for collection.
+                    
+                    Rules:
+                    - Only users with COLLECTOR role can claim
+                    - Product must be in PENDING status
+                    - Product cannot be claimed by its own creator
+                    - Product cannot already be claimed or assigned to a route
+                    """
     )
     @ApiResponses({
             @ApiResponse(
@@ -363,6 +433,48 @@ public class ProductController {
         return ResponseEntity.ok(productClaimService.claim(id));
     }
 
+    // =============================================================
+    // UNCLAIM PRODUCT
+    // =============================================================
+    @Operation(
+            summary = "Unclaim a product",
+            description = "Allows a collector to unclaim a previously claimed product, "
+                    + "as long as it is not linked to a route."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Product successfully unclaimed"
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Business rule violation",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "User not authenticated",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "User not allowed to unclaim this product",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Product not found",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
+            )
+    })
+    @PostMapping("/{productId}/unclaim")
+    @PreAuthorize("hasRole('COLLECTOR')")
+    public ResponseEntity<ProductResponseDTO> unclaimProduct(
+            @PathVariable UUID productId
+    ) {
+        ProductResponseDTO response = productUnclaimService.unclaim(productId);
+        return ResponseEntity.ok(response);
+    }
 
     // =============================================================
     // DELETE PRODUCT
@@ -380,14 +492,14 @@ public class ProductController {
                             content = @Content(schema = @Schema(implementation = ApiError.class),
                                     examples = @ExampleObject(
                                             value = """
-                                            {
-                                              "status": 409,
-                                              "code": "PRODUCT_CANNOT_DELETE",
-                                              "message": "Product linked to routeStop cannot be deleted.",
-                                              "path": "/api/products/{id}",
-                                              "timestamp": "2025-01-01T12:00:00"
-                                            }
-                                            """
+                                                    {
+                                                      "status": 409,
+                                                      "code": "PRODUCT_CANNOT_DELETE",
+                                                      "message": "Product linked to routeStop cannot be deleted.",
+                                                      "path": "/api/products/{id}",
+                                                      "timestamp": "2025-01-01T12:00:00"
+                                                    }
+                                                    """
                                     )
                             )
                     ),
