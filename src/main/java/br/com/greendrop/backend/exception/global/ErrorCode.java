@@ -70,6 +70,8 @@ public enum ErrorCode {
     PRODUCT_NOT_CLAIMED("PRODUCT_NOT_CLAIMED", "error.product.not_claimed", HttpStatus.CONFLICT),
     PRODUCT_ALREADY_ASSIGNED("PRODUCT_ALREADY_ASSIGNED", "error.product_already_assigned", HttpStatus.CONFLICT),
     PRODUCT_NOT_ASSIGNED("PRODUCT_NOT_ASSIGNED", "error.product_not_assigned", HttpStatus.CONFLICT),
+    INVALID_PRODUCT_STATUS_TRANSITION("INVALID_PRODUCT_STATUS_TRANSITION",
+            "error.product.invalid_status_transition", HttpStatus.CONFLICT),
 
     // ===============================
     // 429 — Too Many Requests
