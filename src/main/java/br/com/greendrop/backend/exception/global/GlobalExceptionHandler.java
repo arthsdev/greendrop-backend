@@ -1,5 +1,6 @@
 package br.com.greendrop.backend.exception.global;
 
+import br.com.greendrop.backend.exception.generic.BusinessException;
 import br.com.greendrop.backend.exception.model.ApiError;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
@@ -54,7 +55,7 @@ public class GlobalExceptionHandler {
     }
 
     // =====================================================================
-    //  401 — Authentication failure (Spring Security)
+    //  401 — Authentication failure
     // =====================================================================
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiError> handleAuthentication(AuthenticationException ex,
@@ -71,7 +72,7 @@ public class GlobalExceptionHandler {
     }
 
     // =====================================================================
-    //  403 — Access denied (Roles / Permissions)
+    //  403 — Access denied
     // =====================================================================
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex,
@@ -88,7 +89,26 @@ public class GlobalExceptionHandler {
     }
 
     // =====================================================================
-    //  4xx / 5xx — Domain exceptions (BaseException)
+    //  4xx — BusinessException (DOMAIN)
+    // =====================================================================
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiError> handleBusinessException(BusinessException ex,
+                                                            ServletWebRequest request) {
+
+        ErrorCode errorCode = ex.getErrorCode();
+
+        log.warn("Business exception [{}]", errorCode.getCode());
+
+        ApiError apiError = buildError(
+                errorCode,
+                request
+        );
+
+        return ResponseEntity.status(apiError.getStatus()).body(apiError);
+    }
+
+    // =====================================================================
+    //  4xx / 5xx — BaseException (DOMAIN – richer)
     // =====================================================================
     @ExceptionHandler(BaseException.class)
     public ResponseEntity<ApiError> handleBaseException(BaseException ex,
@@ -96,7 +116,7 @@ public class GlobalExceptionHandler {
 
         ErrorCode errorCode = ex.getErrorCode();
 
-        log.warn("Domain exception [{}]: {}", errorCode.getCode(), ex.getMessage());
+        log.warn("Domain exception [{}]", errorCode.getCode());
 
         ApiError apiError = buildError(
                 errorCode,
@@ -145,5 +165,4 @@ public class GlobalExceptionHandler {
                 LocaleContextHolder.getLocale()
         );
     }
-
 }

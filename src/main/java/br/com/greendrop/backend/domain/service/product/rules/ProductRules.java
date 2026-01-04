@@ -12,96 +12,96 @@ import org.springframework.stereotype.Component;
 /**
  * ProductRules
  *
- * <p>Contains domain-level business rules for Products that go beyond simple
- * validation and authorization. Ensures long-term consistency and prevents
- * illegal state transitions.</p>
+ * <p>
+ * Contains domain-level business rules for Products.
+ * This class validates STATE and CONSISTENCY only.
+ *
+ * Responsibilities:
+ * - validate if an operation is allowed given the current product state
+ * - prevent illegal transitions or actions
+ *
+ * Does NOT:
+ * - change product status
+ * - choose next status
+ * - check permissions (authorization)
+ * </p>
  */
 @Component
 public class ProductRules {
 
+    // =====================================================
+    // RouteStop constraints (STRUCTURAL rules)
+    // =====================================================
+
     /**
-     * Prevents updates to products already linked to a RouteStop.
+     * Ensures that a product is not linked to a route.
+     *
+     * This is a structural invariant:
+     * once linked to a route, the product cannot be
+     * updated, deleted, claimed or unclaimed.
      */
-    public void ensureNotLinkedToRouteStop(Product product) {
+    public void ensureNotLinkedToRoute(Product product) {
         if (product.getRouteStop() != null) {
-            throw new BusinessException(ErrorCode.PRODUCT_CANNOT_UPDATE);
+            throw new BusinessException(ErrorCode.PRODUCT_LINKED_TO_ROUTE);
         }
     }
 
-    /**
-     * Prevents deletion of products already assigned to a RouteStop.
-     */
-    public void ensureNotLinkedForDelete(Product product) {
-        if (product.getRouteStop() != null) {
-            throw new BusinessException(ErrorCode.PRODUCT_CANNOT_DELETE);
-        }
-    }
+    // =====================================================
+    // Category x Role constraints
+    // =====================================================
 
     /**
-     * Ensures a user is allowed to create or update a product with the given category.
-     * This method is null-safe and rejects operations where the role cannot be determined.
-     * Currently, Collectors cannot create or update any product, regardless of category.
+     * Ensures a user can create or update a product with the given category.
+     *
+     * Rules:
+     * - user and role must exist
+     * - collectors cannot create or update products
+     * - null category is allowed (partial update)
      */
     public void validateCategoryForRole(User user, ProductCategory category) {
 
-        // Safety check: user must exist
-        if (user == null) {
+        if (user == null || user.getRole() == null) {
             throw new BusinessException(ErrorCode.INVALID_CATEGORY_FOR_ROLE);
         }
 
-        // Safety check: role must exist
-        if (user.getRole() == null) {
-            throw new BusinessException(ErrorCode.INVALID_CATEGORY_FOR_ROLE);
-        }
-
-        // If category is null (e.g., update without category change), allow it.
-        // If you prefer to forbid null, just replace this block.
         if (category == null) {
             return;
         }
 
-        switch (user.getRole()) {
-
-            case COLLECTOR:
-                // Collectors cannot create or update products of ANY category
-                throw new BusinessException(ErrorCode.INVALID_CATEGORY_FOR_ROLE);
-
-                // Future-proofing:
-                // If tomorrow ADMIN has restricted categories, add logic here.
-            case ADMIN:
-            case USER:
-                return;
-
-            default:
-                throw new BusinessException(ErrorCode.INVALID_CATEGORY_FOR_ROLE);
+        if (user.getRole() == Role.COLLECTOR) {
+            throw new BusinessException(ErrorCode.INVALID_CATEGORY_FOR_ROLE);
         }
+
+        // USER and ADMIN are allowed
     }
 
+    // =====================================================
+    // Claim / Unclaim STATE rules
+    // =====================================================
+
     /**
-     * Ensures that a product can be claimed by a collector.
-     * This method validates the product state only.
-     * Authorization (who is claiming) must be handled elsewhere.
+     * Ensures that a product can be claimed.
+     *
+     * Validates product STATE only.
      */
     public void ensureCanBeClaimed(Product product) {
+
+        if (product.getStatus() == ProductStatus.ASSIGNED) {
+            throw new BusinessException(ErrorCode.PRODUCT_ALREADY_CLAIMED);
+        }
 
         if (product.getStatus() != ProductStatus.PENDING) {
             throw new BusinessException(ErrorCode.PRODUCT_NOT_AVAILABLE_FOR_CLAIM);
         }
-
-        if (product.getClaimedBy() != null) {
-            throw new BusinessException(ErrorCode.PRODUCT_ALREADY_CLAIMED);
-        }
-
-        if (product.getRouteStop() != null) {
-            throw new BusinessException(ErrorCode.PRODUCT_ALREADY_ASSIGNED_TO_ROUTE);
-        }
-
-        // 🚀 Future rules:
-        // - time window validation
-        // - distance (km radius)
     }
 
+    /**
+     * Ensures that a product can be unclaimed.
+     *
+     * Validates product STATE only.
+     */
     public void ensureCanBeUnclaimed(Product product) {
+
         if (!product.isClaimed()) {
             throw new BusinessException(ErrorCode.PRODUCT_NOT_CLAIMED);
         }

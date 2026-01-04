@@ -1,13 +1,11 @@
 package br.com.greendrop.backend.controller;
 
-import br.com.greendrop.backend.domain.model.Product;
 import br.com.greendrop.backend.domain.model.enums.ProductCategory;
 import br.com.greendrop.backend.domain.model.enums.ProductStatus;
 import br.com.greendrop.backend.domain.service.product.ProductClaimService;
 import br.com.greendrop.backend.domain.service.product.ProductService;
 import br.com.greendrop.backend.domain.service.product.ProductUnclaimService;
 import br.com.greendrop.backend.dto.product.*;
-
 import br.com.greendrop.backend.exception.model.ApiError;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,14 +18,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import lombok.RequiredArgsConstructor;
+
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,7 +34,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-@Tag(name = "Products", description = "Endpoints for product management and search")
+@Tag(name = "Products", description = "Product management and lifecycle endpoints")
 @RestController
 @RequestMapping("/api/products")
 @RequiredArgsConstructor
@@ -48,126 +45,77 @@ public class ProductController {
     private final ProductUnclaimService productUnclaimService;
 
     // =============================================================
-    // CREATE PRODUCT
+    // CREATE
     // =============================================================
     @Operation(
-            summary = "Create a new product",
+            summary = "Create a product",
             description = """
-                    Creates a product.
-                    Allowed roles: USER, ADMIN.
-                    Forbidden role: COLLECTOR.
-                    """,
-            responses = {
-
-                    @ApiResponse(
-                            responseCode = "201",
-                            description = "Product created successfully",
-                            content = @Content(schema = @Schema(implementation = ProductResponseDTO.class))
-                    ),
-
-                    @ApiResponse(
-                            responseCode = "400",
-                            description = "Validation error",
-                            content = @Content(schema = @Schema(implementation = ApiError.class))
-                    ),
-
-                    @ApiResponse(
-                            responseCode = "401",
-                            description = "Unauthorized",
-                            content = @Content(schema = @Schema(implementation = ApiError.class))
-                    ),
-
-                    @ApiResponse(
-                            responseCode = "403",
-                            description = "Collector user is forbidden to create products",
-                            content = @Content(schema = @Schema(implementation = ApiError.class),
-                                    examples = @ExampleObject(
-                                            name = "ProductForbidden",
-                                            value = """
-                                                    {
-                                                      "status": 403,
-                                                      "code": "PRODUCT_FORBIDDEN",
-                                                      "message": "Collectors are not allowed to create products.",
-                                                      "path": "/api/products",
-                                                      "timestamp": "2025-01-01T12:00:00"
-                                                    }
-                                                    """
-                                    )
-                            )
-                    ),
-
-                    @ApiResponse(
-                            responseCode = "404",
-                            description = "Category or related resource not found",
-                            content = @Content(schema = @Schema(implementation = ApiError.class))
-                    ),
-
-                    @ApiResponse(
-                            responseCode = "500",
-                            description = "Internal server error",
-                            content = @Content(schema = @Schema(implementation = ApiError.class))
-                    )
-            }
+                    Creates a new product.
+                    
+                    Allowed roles:
+                    - USER
+                    - ADMIN
+                    
+                    Forbidden:
+                    - COLLECTOR
+                    """
     )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "Product created",
+                    content = @Content(schema = @Schema(implementation = ProductResponseDTO.class))
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Validation failed",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Collector cannot create products",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
+            )
+    })
     @PostMapping
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ProductResponseDTO> create(
             @Valid @RequestBody ProductCreateDTO dto
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED)
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
                 .body(productService.create(dto));
     }
 
     // =============================================================
-    // GET PRODUCT BY ID
+    // GET BY ID
     // =============================================================
-    @Operation(
-            summary = "Get product by ID",
-            responses = {
-
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Product found",
-                            content = @Content(schema = @Schema(implementation = ProductResponseDTO.class))
-                    ),
-
-                    @ApiResponse(
-                            responseCode = "404",
-                            description = "Product not found",
-                            content = @Content(schema = @Schema(implementation = ApiError.class),
-                                    examples = @ExampleObject(
-                                            name = "NotFoundExample",
-                                            value = """
-                                                    {
-                                                      "status": 404,
-                                                      "code": "PRODUCT_NOT_FOUND",
-                                                      "message": "Product not found.",
-                                                      "path": "/api/products/{id}",
-                                                      "timestamp": "2025-01-01T12:00:00"
-                                                    }
-                                                    """
-                                    )
-                            )
-                    )
-            }
-    )
+    @Operation(summary = "Get product by ID")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Product found",
+                    content = @Content(schema = @Schema(implementation = ProductResponseDTO.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Product not found",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
+            )
+    })
     @GetMapping("/{id}")
-    public ResponseEntity<ProductResponseDTO> getById(
-            @PathVariable UUID id
-    ) {
+    public ResponseEntity<ProductResponseDTO> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(productService.getById(id));
     }
 
     // =============================================================
-    // LIST PRODUCTS
+    // LIST
     // =============================================================
     @Operation(
-            summary = "List products with filters and pagination",
-            description = "Allows filtering by status, category, weight, date range, and more.",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Products retrieved")
-            }
+            summary = "List products",
+            description = "List products with filters and pagination"
     )
+    @ApiResponse(responseCode = "200", description = "Products retrieved")
     @GetMapping
     public ResponseEntity<Page<ProductResponseDTO>> list(
             @RequestParam(required = false) ProductStatus status,
@@ -187,87 +135,30 @@ public class ProductController {
 
             @ParameterObject Pageable pageable
     ) {
-
         return ResponseEntity.ok(
                 productService.listProducts(
-                        status, category, postedBy, routeStopId,
-                        weightMin, weightMax, createdFrom, createdTo,
+                        status,
+                        category,
+                        postedBy,
+                        routeStopId,
+                        weightMin,
+                        weightMax,
+                        createdFrom,
+                        createdTo,
                         pageable
                 )
         );
     }
 
     // =============================================================
-    // LIST BY USER
+    // MY PRODUCTS
     // =============================================================
-    @Operation(
-            summary = "List products by user",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "User products retrieved")
-            }
+    @Operation(summary = "List products created by authenticated user")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Products retrieved",
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = ProductResponseDTO.class)))
     )
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<List<ProductResponseDTO>> byUser(
-            @PathVariable UUID userId
-    ) {
-        return ResponseEntity.ok(productService.getProductsByUser(userId));
-    }
-
-
-    // =============================================================
-    // LIST CREATED PRODUCTS
-    // =============================================================
-    @Operation(
-            summary = "List products created by the authenticated user",
-            description = """
-                    Returns all products created by the currently authenticated user.
-                    The user ID is extracted from the JWT token and automatically used to filter the results.
-                    """
-    )
-    @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "Products successfully retrieved",
-                    content = @Content(
-                            mediaType = "application/json",
-                            array = @ArraySchema(schema = @Schema(implementation = ProductResponseDTO.class))
-                    )
-            ),
-            @ApiResponse(
-                    responseCode = "401",
-                    description = "Unauthorized – missing or invalid authentication token",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(example = """
-                                    {
-                                      "timestamp": "2025-01-01T12:00:00",
-                                      "status": 401,
-                                      "error": "Unauthorized",
-                                      "message": "Invalid or missing JWT token",
-                                      "errorCode": "AUTH_401",
-                                      "path": "/api/products/me"
-                                    }
-                                    """)
-                    )
-            ),
-            @ApiResponse(
-                    responseCode = "500",
-                    description = "Internal server error",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(example = """
-                                    {
-                                      "timestamp": "2025-01-01T12:00:00",
-                                      "status": 500,
-                                      "error": "Internal Server Error",
-                                      "message": "Unexpected server error",
-                                      "errorCode": "SERVER_500",
-                                      "path": "/api/products/me"
-                                    }
-                                    """)
-                    )
-            )
-    })
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<ProductResponseDTO>> getMyProducts() {
@@ -275,65 +166,22 @@ public class ProductController {
     }
 
     // =============================================================
-    // LIST MY CLAIMED PRODUCTS
+    // MY CLAIMS
     // =============================================================
     @Operation(
-            summary = "List claimed products of the authenticated collector",
-            description = """
-                    Returns all products currently claimed by the authenticated collector.
-                    
-                    Rules:
-                    - Only users with COLLECTOR role can access this endpoint
-                    - Only products with ASSIGNED status are returned
-                    - Products linked to a route are included, since they are still claimed
-                    """
+            summary = "List claimed products",
+            description = "Returns products currently claimed by the authenticated collector"
     )
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "Claimed products successfully retrieved",
-                    content = @Content(
-                            mediaType = "application/json",
-                            array = @ArraySchema(
-                                    schema = @Schema(implementation = ProductResponseDTO.class)
-                            )
-                    )
-            ),
-            @ApiResponse(
-                    responseCode = "401",
-                    description = "User not authenticated",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ApiError.class)
-                    )
+                    description = "Claimed products retrieved",
+                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = ProductResponseDTO.class)))
             ),
             @ApiResponse(
                     responseCode = "403",
-                    description = "User is not a collector",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ApiError.class),
-                            examples = @ExampleObject(
-                                    name = "CollectorOnly",
-                                    value = """
-                                            {
-                                              "status": 403,
-                                              "code": "ACCESS_DENIED",
-                                              "message": "Only collectors can access this resource.",
-                                              "path": "/api/products/me/claims",
-                                              "timestamp": "2025-01-01T12:00:00"
-                                            }
-                                            """
-                            )
-                    )
-            ),
-            @ApiResponse(
-                    responseCode = "500",
-                    description = "Internal server error",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ApiError.class)
-                    )
+                    description = "Only collectors allowed",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
             )
     })
     @GetMapping("/me/claims")
@@ -343,36 +191,21 @@ public class ProductController {
     }
 
     // =============================================================
-    // UPDATE PRODUCT
+    // UPDATE
     // =============================================================
-    @Operation(
-            summary = "Update product",
-            description = "Only product owner or admin may update.",
-            responses = {
-
-                    @ApiResponse(responseCode = "200", description = "Product updated"),
-                    @ApiResponse(responseCode = "400", description = "Validation error"),
-                    @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class))),
-                    @ApiResponse(
-                            responseCode = "409",
-                            description = "Product cannot be updated",
-                            content = @Content(schema = @Schema(implementation = ApiError.class),
-                                    examples = @ExampleObject(
-                                            value = """
-                                                    {
-                                                      "status": 409,
-                                                      "code": "PRODUCT_CANNOT_UPDATE",
-                                                      "message": "This product is linked to a routeStop and cannot be modified.",
-                                                      "path": "/api/products/{id}",
-                                                      "timestamp": "2025-01-01T12:00:00"
-                                                    }
-                                                    """
-                                    )
-                            )
-                    ),
-                    @ApiResponse(responseCode = "404", description = "Product not found")
-            }
-    )
+    @Operation(summary = "Update product")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Product updated",
+                    content = @Content(schema = @Schema(implementation = ProductResponseDTO.class))
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "Product cannot be updated",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
+            )
+    })
     @PatchMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ProductResponseDTO> update(
@@ -383,134 +216,84 @@ public class ProductController {
     }
 
     // =============================================================
-    // CLAIM PRODUCT
+    // CLAIM
     // =============================================================
-    @PostMapping("/{id}/claim")
-    @PreAuthorize("hasRole('COLLECTOR')")
     @Operation(
-            summary = "Claim a product for collection",
+            summary = "Claim product",
             description = """
-                    Allows a collector to claim a product for collection.
+                    Allows a collector to claim a product.
                     
                     Rules:
-                    - Only users with COLLECTOR role can claim
-                    - Product must be in PENDING status
-                    - Product cannot be claimed by its own creator
-                    - Product cannot already be claimed or assigned to a route
+                    - Product must be PENDING
+                    - Collector cannot be the creator
+                    - Product cannot be linked to a route
                     """
     )
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "Product successfully claimed"
+                    description = "Product claimed",
+                    content = @Content(schema = @Schema(implementation = ProductResponseDTO.class))
             ),
             @ApiResponse(
-                    responseCode = "400",
-                    description = "Product not available for claim or already claimed",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ApiError.class)
-                    )
-            ),
-            @ApiResponse(
-                    responseCode = "403",
-                    description = "User is not allowed to claim this product",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ApiError.class)
-                    )
-            ),
-            @ApiResponse(
-                    responseCode = "404",
-                    description = "Product not found",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ApiError.class)
-                    )
+                    responseCode = "409",
+                    description = "Invalid product state",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
             )
     })
+    @PostMapping("/{id}/claim")
+    @PreAuthorize("hasRole('COLLECTOR')")
     public ResponseEntity<ProductResponseDTO> claim(@PathVariable UUID id) {
         return ResponseEntity.ok(productClaimService.claim(id));
     }
 
     // =============================================================
-    // UNCLAIM PRODUCT
+    // UNCLAIM
     // =============================================================
     @Operation(
-            summary = "Unclaim a product",
-            description = "Allows a collector to unclaim a previously claimed product, "
-                    + "as long as it is not linked to a route."
+            summary = "Unclaim product",
+            description = """
+                    Allows a collector to unclaim a product.
+                    
+                    Rules:
+                    - Must be current collector
+                    - Product must be ASSIGNED
+                    - Product cannot be linked to a route
+                    """
     )
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "Product successfully unclaimed"
+                    description = "Product unclaimed",
+                    content = @Content(schema = @Schema(implementation = ProductResponseDTO.class))
             ),
             @ApiResponse(
-                    responseCode = "400",
-                    description = "Business rule violation",
-                    content = @Content(schema = @Schema(implementation = ApiError.class))
-            ),
-            @ApiResponse(
-                    responseCode = "401",
-                    description = "User not authenticated",
-                    content = @Content(schema = @Schema(implementation = ApiError.class))
-            ),
-            @ApiResponse(
-                    responseCode = "403",
-                    description = "User not allowed to unclaim this product",
-                    content = @Content(schema = @Schema(implementation = ApiError.class))
-            ),
-            @ApiResponse(
-                    responseCode = "404",
-                    description = "Product not found",
+                    responseCode = "409",
+                    description = "Invalid product state",
                     content = @Content(schema = @Schema(implementation = ApiError.class))
             )
     })
-    @PostMapping("/{productId}/unclaim")
+    @PostMapping("/{id}/unclaim")
     @PreAuthorize("hasRole('COLLECTOR')")
-    public ResponseEntity<ProductResponseDTO> unclaimProduct(
-            @PathVariable UUID productId
-    ) {
-        ProductResponseDTO response = productUnclaimService.unclaim(productId);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<ProductResponseDTO> unclaim(@PathVariable UUID id) {
+        return ResponseEntity.ok(productUnclaimService.unclaim(id));
     }
 
     // =============================================================
-    // DELETE PRODUCT
+    // DELETE
     // =============================================================
-    @Operation(
-            summary = "Soft delete a product",
-            description = "Only owner or admin may delete.",
-            responses = {
-
-                    @ApiResponse(responseCode = "204", description = "Product deleted"),
-                    @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content(schema = @Schema(implementation = ApiError.class))),
-                    @ApiResponse(
-                            responseCode = "409",
-                            description = "Product cannot be deleted",
-                            content = @Content(schema = @Schema(implementation = ApiError.class),
-                                    examples = @ExampleObject(
-                                            value = """
-                                                    {
-                                                      "status": 409,
-                                                      "code": "PRODUCT_CANNOT_DELETE",
-                                                      "message": "Product linked to routeStop cannot be deleted.",
-                                                      "path": "/api/products/{id}",
-                                                      "timestamp": "2025-01-01T12:00:00"
-                                                    }
-                                                    """
-                                    )
-                            )
-                    ),
-                    @ApiResponse(responseCode = "404", description = "Product not found")
-            }
-    )
+    @Operation(summary = "Soft delete product")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Product deleted"),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "Product cannot be deleted",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
+            )
+    })
     @DeleteMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Void> delete(
-            @PathVariable UUID id
-    ) {
+    public ResponseEntity<Void> delete(@PathVariable UUID id) {
         productService.softDelete(id);
         return ResponseEntity.noContent().build();
     }

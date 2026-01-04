@@ -21,24 +21,24 @@ public class ProductAuthorization {
 
         Role role = user.getRole();
 
-        boolean allowed =
-                role == Role.USER ||
-                        role == Role.ADMIN;
-
-        if (!allowed) {
+        if (role != Role.USER && role != Role.ADMIN) {
             throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
         }
     }
 
     /**
-     * Product can be updated/deleted only by owner or admin.
+     * Product can be updated or deleted only by owner or admin.
      */
     public void checkOwnershipOrAdmin(Product product, User currentUser) {
+
         if (product == null || currentUser == null) {
             throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
         }
 
-        boolean isOwner = product.getPostedBy().getId().equals(currentUser.getId());
+        boolean isOwner =
+                product.getPostedBy() != null &&
+                        product.getPostedBy().getId().equals(currentUser.getId());
+
         boolean isAdmin = currentUser.getRole() == Role.ADMIN;
 
         if (!isOwner && !isAdmin) {
@@ -48,27 +48,33 @@ public class ProductAuthorization {
 
     /**
      * Validates whether a user is authorized to claim a product.
-     * This method performs authorization checks related to the user identity
-     * and role. It does NOT validate the product state (status, routing, time
-     * or distance rules)
+     * Authorization only (no state validation).
      */
     public void checkCanClaimProduct(User user, Product product) {
 
+        if (user == null || user.getRole() == null) {
+            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
+        }
+
         if (!user.isCollector()) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
         }
 
         if (product.getPostedBy().getId().equals(user.getId())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
         }
     }
 
+    /**
+     * Validates whether the current user is authorized to unclaim a product.
+     */
+    public void checkCanUnclaim(User user, Product product) {
+        if (user == null || product == null) {
+            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
+        }
 
-    //TODO Javadoc with properly description
-    public void checkCanUnclaim(Product product, User user) {
         if (!user.equals(product.getClaimedBy())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
         }
     }
-
 }

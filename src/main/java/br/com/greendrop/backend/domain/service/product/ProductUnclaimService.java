@@ -2,6 +2,7 @@ package br.com.greendrop.backend.domain.service.product;
 
 import br.com.greendrop.backend.domain.model.Product;
 import br.com.greendrop.backend.domain.model.User;
+import br.com.greendrop.backend.domain.model.enums.ProductStatus;
 import br.com.greendrop.backend.domain.repository.ProductRepository;
 import br.com.greendrop.backend.domain.service.product.authorization.ProductAuthorization;
 import br.com.greendrop.backend.domain.service.product.rules.ProductRules;
@@ -27,15 +28,11 @@ public class ProductUnclaimService {
     private final CurrentUserService currentUserService;
     private final ProductAuthorization authorization;
     private final ProductRules rules;
+    private final ProductService productService;
     private final ProductMapper productMapper;
 
     /**
      * Unclaims a product previously claimed by the current collector.
-     *
-     *   Authorization: only the same collector can unclaim
-     *   Domain rules: product must be claimed and assigned
-     *   Domain behavior: unclaim
-     *   Persist and return response
      */
     public ProductResponseDTO unclaim(UUID productId) {
 
@@ -44,17 +41,22 @@ public class ProductUnclaimService {
 
         User collector = currentUserService.getCurrentUser();
 
-        // Authorization (WHO can do)
-        authorization.checkCanUnclaim(product, collector);
+        // WHO — authorization
+        authorization.checkCanUnclaim(collector, product);
 
-        // Domain rules (STATE)
+        // STATE — domain rules
         rules.ensureCanBeUnclaimed(product);
-        rules.ensureNotLinkedToRouteStop(product);
+        rules.ensureNotLinkedToRoute(product);
 
-        // Domain behavior
-        product.unclaim();
+        // DOMAIN mutation
+        product.removeCollector();
 
-        productRepository.save(product);
+        // STATUS + AUDIT (single source of truth)
+        productService.changeStatus(
+                product,
+                ProductStatus.PENDING,
+                collector
+        );
 
         log.info(
                 "Product unclaimed (productId={}, collectorId={})",

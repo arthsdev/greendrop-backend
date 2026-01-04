@@ -2,6 +2,7 @@ package br.com.greendrop.backend.domain.service.product;
 
 import br.com.greendrop.backend.domain.model.Product;
 import br.com.greendrop.backend.domain.model.User;
+import br.com.greendrop.backend.domain.model.enums.ProductStatus;
 import br.com.greendrop.backend.domain.repository.ProductRepository;
 import br.com.greendrop.backend.domain.service.product.authorization.ProductAuthorization;
 import br.com.greendrop.backend.domain.service.product.rules.ProductRules;
@@ -27,8 +28,12 @@ public class ProductClaimService {
     private final CurrentUserService currentUserService;
     private final ProductAuthorization authorization;
     private final ProductRules rules;
+    private final ProductService productService;
     private final ProductMapper productMapper;
 
+    /**
+     * Claims a product for the current collector.
+     */
     public ProductResponseDTO claim(UUID productId) {
 
         Product product = productRepository.findById(productId)
@@ -36,12 +41,22 @@ public class ProductClaimService {
 
         User collector = currentUserService.getCurrentUser();
 
+        // WHO — authorization
         authorization.checkCanClaimProduct(collector, product);
+
+        // STATE — domain rules
         rules.ensureCanBeClaimed(product);
+        rules.ensureNotLinkedToRoute(product);
 
-        product.claimBy(collector);
+        // STATUS + AUDIT (single source of truth)
+        productService.changeStatus(
+                product,
+                ProductStatus.ASSIGNED,
+                collector
+        );
 
-        productRepository.save(product);
+        // DATA mutation only
+        product.assignCollector(collector);
 
         log.info(
                 "Product claimed (productId={}, collectorId={})",

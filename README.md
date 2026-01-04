@@ -132,6 +132,62 @@ Current guarantees:
 - Proper HTTP semantics (401 vs 403)
 - Validation errors mapped to structured responses
 
+------------------------------------------------------------------------
+
+## 🔄 Product Claim / Unclaim Lifecycle
+
+Products can be claimed and unclaimed by collectors following strict
+authorization and domain rules.
+
+### 📥 Claim a Product
+
+A product can be claimed when:
+
+- The authenticated user has role **COLLECTOR**
+- The collector is **not the product owner**
+- The product status is **PENDING**
+- The product is **not already claimed**
+- The product is **not linked to a RouteStop**
+
+#### Flow:
+1. Authenticate as COLLECTOR
+2. Request claim endpoint
+3. Authorization is validated (role + ownership)
+4. Domain rules validate product state
+5. Product status changes from `PENDING` → `CLAIMED`
+6. Collector is assigned to the product
+7. Status change is recorded in history
+
+---
+
+### 📤 Unclaim a Product
+
+A product can be unclaimed when:
+
+- The authenticated user is the **current collector**
+- The product status is **CLAIMED**
+- The product is currently claimed
+- The product is **not linked to a RouteStop**
+
+#### Flow:
+1. Authenticate as COLLECTOR
+2. Request unclaim endpoint
+3. Authorization validates ownership of the claim
+4. Domain rules validate product state
+5. Product status changes from `CLAIMED` → `PENDING`
+6. Collector is removed from the product
+7. Status change is recorded in history
+
+---
+
+### 🧠 Design Notes
+
+- Status transitions are centralized in `ProductService.changeStatus`
+- Authorization and domain rules are separated:
+    - `ProductAuthorization`: WHO can perform the action
+    - `ProductRules`: WHEN the action is allowed
+- Status history is tracked for auditing and future reporting
+
 
 ------------------------------------------------------------------------
 ### 🚚 Collector Routes

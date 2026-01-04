@@ -49,6 +49,7 @@ public class ProductService {
     private final ProductAuthorization authorization;
     private final ProductValidation validation;
     private final ProductRules rules;
+    private final ProductStatusHistoryService productStatusHistoryService;
 
     // ========================================================================
     // CREATE
@@ -124,7 +125,7 @@ public class ProductService {
         authorization.checkOwnershipOrAdmin(product, current);
 
         // Domain rule: can't update if linked to route stop
-        rules.ensureNotLinkedToRouteStop(product);
+        rules.ensureNotLinkedToRoute(product);
 
         // Validate images (if present)
         validation.validateImageUrls(dto.imageUrls());
@@ -160,13 +161,13 @@ public class ProductService {
         User current = currentUserService.getCurrentUser();
 
         authorization.checkOwnershipOrAdmin(product, current);
-        rules.ensureNotLinkedForDelete(product);
+        rules.ensureNotLinkedToRoute(product);
 
-        product.markAsDeleted();
-        productRepository.save(product);
+        changeStatus(product, ProductStatus.DELETED, current);
 
         log.info("Product soft-deleted (id={} by={})", product.getId(), current.getId());
     }
+
 
     // ========================================================================
     // LIST / FILTERING
@@ -239,4 +240,34 @@ public class ProductService {
         return productRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
     }
+
+    public void changeStatus(Product product, ProductStatus newStatus, User actor) {
+
+        ProductStatus currentStatus = product.getStatus();
+
+        if (!currentStatus.canTransitionTo(newStatus)) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION
+            );
+        }
+
+        product.changeStatus(newStatus);
+
+        productRepository.save(product);
+
+        productStatusHistoryService.recordStatusChange(
+                product,
+                currentStatus,
+                newStatus,
+                actor
+        );
+    }
+
+
+// TODO: Consider extracting status transition orchestration
+//       (changeStatus + history tracking) into a dedicated
+//       ProductStatusService once product lifecycle complexity increases.
+//       For now, keeping it here avoids premature abstraction.
+
+
 }
