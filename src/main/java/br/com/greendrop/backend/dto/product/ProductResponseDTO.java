@@ -21,5 +21,6 @@ public record ProductResponseDTO(
         ProductCategory category,
         ProductStatus status,
         List<String> images,
-        UUID postedBy
+        UUID postedBy,
+        ProductActionPolicyResponse actions
 ) {}

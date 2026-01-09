@@ -41,8 +41,12 @@ public class ProductClaimService {
 
         User collector = currentUserService.getCurrentUser();
 
+        boolean isOwner =
+                product.getPostedBy() != null &&
+                        product.getPostedBy().getId().equals(collector.getId());
+
         // WHO — authorization
-        authorization.checkCanClaimProduct(collector, product);
+        authorization.checkCanClaimProduct(isOwner, collector);
 
         // STATE — domain rules
         rules.ensureCanBeClaimed(product);
@@ -66,4 +70,5 @@ public class ProductClaimService {
 
         return productMapper.toResponse(product);
     }
+
 }

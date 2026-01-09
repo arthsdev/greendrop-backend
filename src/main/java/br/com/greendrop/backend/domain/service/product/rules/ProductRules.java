@@ -13,32 +13,33 @@ import org.springframework.stereotype.Component;
  * ProductRules
  *
  * <p>
- * Contains domain-level business rules for Products.
- * This class validates STATE and CONSISTENCY only.
+ * Domain-level business rules for Products.
  *
- * Responsibilities:
- * - validate if an operation is allowed given the current product state
- * - prevent illegal transitions or actions
+ * This class validates:
+ * - product STATE
+ * - structural CONSISTENCY
  *
- * Does NOT:
- * - change product status
- * - choose next status
- * - check permissions (authorization)
+ * It does NOT:
+ * - perform authorization checks
+ * - mutate entities
+ * - change status directly
  * </p>
  */
 @Component
 public class ProductRules {
 
     // =====================================================
-    // RouteStop constraints (STRUCTURAL rules)
+    // Structural invariants
     // =====================================================
 
     /**
-     * Ensures that a product is not linked to a route.
+     * A product linked to a route becomes immutable.
      *
-     * This is a structural invariant:
-     * once linked to a route, the product cannot be
-     * updated, deleted, claimed or unclaimed.
+     * Once linked, it cannot be:
+     * - updated
+     * - deleted
+     * - claimed
+     * - unclaimed
      */
     public void ensureNotLinkedToRoute(Product product) {
         if (product.getRouteStop() != null) {
@@ -47,16 +48,43 @@ public class ProductRules {
     }
 
     // =====================================================
-    // Category x Role constraints
+    // Update / Delete STATE rules
     // =====================================================
 
     /**
-     * Ensures a user can create or update a product with the given category.
+     * Ensures that a product can be updated.
+     */
+    public void ensureCanBeUpdated(Product product) {
+        ensureNotLinkedToRoute(product);
+
+        if (product.getStatus() == ProductStatus.DELETED) {
+            throw new BusinessException(ErrorCode.PRODUCT_ALREADY_DELETED);
+        }
+    }
+
+    /**
+     * Ensures that a product can be soft-deleted.
+     */
+    public void ensureCanBeDeleted(Product product) {
+        ensureNotLinkedToRoute(product);
+
+        if (product.getStatus() == ProductStatus.DELETED) {
+            throw new BusinessException(ErrorCode.PRODUCT_ALREADY_DELETED);
+        }
+    }
+
+    // =====================================================
+    // Category x Role rules
+    // =====================================================
+
+    /**
+     * Ensures a user can create or update a product
+     * with the given category.
      *
      * Rules:
      * - user and role must exist
      * - collectors cannot create or update products
-     * - null category is allowed (partial update)
+     * - null category is allowed (PATCH / partial update)
      */
     public void validateCategoryForRole(User user, ProductCategory category) {
 
@@ -71,8 +99,6 @@ public class ProductRules {
         if (user.getRole() == Role.COLLECTOR) {
             throw new BusinessException(ErrorCode.INVALID_CATEGORY_FOR_ROLE);
         }
-
-        // USER and ADMIN are allowed
     }
 
     // =====================================================
@@ -82,7 +108,7 @@ public class ProductRules {
     /**
      * Ensures that a product can be claimed.
      *
-     * Validates product STATE only.
+     * Validates STATE only.
      */
     public void ensureCanBeClaimed(Product product) {
 
@@ -98,7 +124,7 @@ public class ProductRules {
     /**
      * Ensures that a product can be unclaimed.
      *
-     * Validates product STATE only.
+     * Validates STATE only.
      */
     public void ensureCanBeUnclaimed(Product product) {
 

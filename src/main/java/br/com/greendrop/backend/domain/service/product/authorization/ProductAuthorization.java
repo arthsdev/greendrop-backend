@@ -1,9 +1,7 @@
 package br.com.greendrop.backend.domain.service.product.authorization;
 
-import br.com.greendrop.backend.domain.model.Product;
 import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.domain.model.enums.Role;
-import br.com.greendrop.backend.exception.auth.ForbiddenException;
 import br.com.greendrop.backend.exception.generic.BusinessException;
 import br.com.greendrop.backend.exception.global.ErrorCode;
 import org.springframework.stereotype.Component;
@@ -15,66 +13,55 @@ public class ProductAuthorization {
      * Only USER and ADMIN can create products.
      */
     public void checkCanCreateProduct(User user) {
-        if (user == null || user.getRole() == null) {
-            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
-        }
+        requireAuthenticated(user);
 
-        Role role = user.getRole();
-
-        if (role != Role.USER && role != Role.ADMIN) {
-            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
+        if (user.getRole() != Role.USER && user.getRole() != Role.ADMIN) {
+            throw new BusinessException(ErrorCode.PRODUCT_CREATE_FORBIDDEN);
         }
     }
 
     /**
-     * Product can be updated or deleted only by owner or admin.
+     * Only OWNER or ADMIN can modify a product.
      */
-    public void checkOwnershipOrAdmin(Product product, User currentUser) {
+    public void checkOwnershipOrAdmin(boolean isOwner, User user) {
+        requireAuthenticated(user);
 
-        if (product == null || currentUser == null) {
-            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
-        }
-
-        boolean isOwner =
-                product.getPostedBy() != null &&
-                        product.getPostedBy().getId().equals(currentUser.getId());
-
-        boolean isAdmin = currentUser.getRole() == Role.ADMIN;
-
-        if (!isOwner && !isAdmin) {
-            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
+        if (!isOwner && user.getRole() != Role.ADMIN) {
+            throw new BusinessException(ErrorCode.PRODUCT_MODIFY_FORBIDDEN);
         }
     }
 
     /**
-     * Validates whether a user is authorized to claim a product.
-     * Authorization only (no state validation).
+     * Only collectors can claim products,
+     * and they cannot claim their own products.
      */
-    public void checkCanClaimProduct(User user, Product product) {
+    public void checkCanClaimProduct(boolean isOwner, User user) {
+        requireAuthenticated(user);
 
-        if (user == null || user.getRole() == null) {
-            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
+        if (isOwner) {
+            throw new BusinessException(ErrorCode.PRODUCT_OWNER_CANNOT_CLAIM);
         }
 
         if (!user.isCollector()) {
-            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
-        }
-
-        if (product.getPostedBy().getId().equals(user.getId())) {
-            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
+            throw new BusinessException(ErrorCode.PRODUCT_CLAIM_ONLY_COLLECTOR);
         }
     }
 
     /**
-     * Validates whether the current user is authorized to unclaim a product.
+     * Only the collector who claimed can unclaim.
      */
-    public void checkCanUnclaim(User user, Product product) {
-        if (user == null || product == null) {
-            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
-        }
+    public void checkCanUnclaim(boolean isClaimer, User user) {
+        requireAuthenticated(user);
 
-        if (!user.equals(product.getClaimedBy())) {
-            throw new ForbiddenException(ErrorCode.UNAUTHORIZED_ACTION);
+        if (!isClaimer) {
+            throw new BusinessException(ErrorCode.PRODUCT_UNCLAIM_FORBIDDEN);
+        }
+    }
+
+    private void requireAuthenticated(User user) {
+        if (user == null || user.getRole() == null) {
+            throw new BusinessException(ErrorCode.AUTHENTICATION_REQUIRED);
         }
     }
 }
+

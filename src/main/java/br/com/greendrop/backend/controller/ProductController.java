@@ -242,7 +242,6 @@ public class ProductController {
             )
     })
     @PostMapping("/{id}/claim")
-    @PreAuthorize("hasRole('COLLECTOR')")
     public ResponseEntity<ProductResponseDTO> claim(@PathVariable UUID id) {
         return ResponseEntity.ok(productClaimService.claim(id));
     }
