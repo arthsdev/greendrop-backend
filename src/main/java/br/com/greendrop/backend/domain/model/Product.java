@@ -109,10 +109,6 @@ public class Product {
      * Does NOT change status.
      */
     public void assignCollector(User collector) {
-        if (collector == null) {
-            throw new BusinessException(ErrorCode.INVALID_COLLECTOR);
-        }
-
         this.claimedBy = collector;
         this.claimedAt = LocalDateTime.now();
     }
@@ -122,10 +118,6 @@ public class Product {
      * Does NOT change status.
      */
     public void removeCollector() {
-        if (this.claimedBy == null) {
-            throw new BusinessException(ErrorCode.COLLECTOR_NOT_ASSIGNED);
-        }
-
         this.claimedBy = null;
         this.claimedAt = null;
     }

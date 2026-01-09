@@ -7,6 +7,11 @@ import br.com.greendrop.backend.dto.user.UserUpdateDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 
+/**
+ * Decorator responsible for sanitizing user input
+ * (trim, whitespace normalization, email lowercase).
+ * No business rules should live here.
+ */
 @Slf4j
 public abstract class UserMapperDecorator implements UserMapper {
 

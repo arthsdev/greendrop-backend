@@ -3,6 +3,7 @@ package br.com.greendrop.backend.mapper.product;
 import br.com.greendrop.backend.domain.model.Product;
 import br.com.greendrop.backend.domain.model.ProductImage;
 import br.com.greendrop.backend.domain.model.User;
+import br.com.greendrop.backend.domain.service.product.policy.ProductActionPolicy;
 import br.com.greendrop.backend.dto.product.ProductCreateDTO;
 import br.com.greendrop.backend.dto.product.ProductResponseDTO;
 import br.com.greendrop.backend.dto.product.ProductUpdateDTO;
@@ -19,18 +20,29 @@ import java.util.UUID;
         componentModel = "spring",
         unmappedTargetPolicy = ReportingPolicy.IGNORE
 )
-@DecoratedWith(ProductMapperDecorator.class)
 public interface ProductMapper {
+
+    // =========================
+    // DTO → Entity
+    // =========================
 
     Product toEntity(ProductCreateDTO dto);
 
     void updateEntityFromDTO(ProductUpdateDTO dto, @MappingTarget Product entity);
+
+    // =========================
+    // Entity → Response
+    // =========================
 
     @Mapping(target = "postedBy", source = "postedBy", qualifiedByName = "mapUserToUUID")
     @Mapping(target = "images", source = "images", qualifiedByName = "mapImages")
     ProductResponseDTO toResponse(Product entity);
 
     List<ProductResponseDTO> toResponseList(List<Product> products);
+
+    // =========================
+    // Custom mappers
+    // =========================
 
     @Named("mapUserToUUID")
     static UUID mapUserToUUID(User user) {
@@ -39,7 +51,9 @@ public interface ProductMapper {
 
     @Named("mapImages")
     static List<String> mapImages(List<ProductImage> images) {
-        return images == null ? null : images.stream()
+        return images == null
+                ? List.of()
+                : images.stream()
                 .map(ProductImage::getUrl)
                 .toList();
     }

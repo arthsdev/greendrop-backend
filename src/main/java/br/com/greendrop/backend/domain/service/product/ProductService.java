@@ -5,36 +5,33 @@ import br.com.greendrop.backend.domain.model.ProductImage;
 import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.domain.model.enums.ProductCategory;
 import br.com.greendrop.backend.domain.model.enums.ProductStatus;
-import br.com.greendrop.backend.domain.model.enums.Role;
 import br.com.greendrop.backend.domain.repository.ProductRepository;
 import br.com.greendrop.backend.domain.service.product.authorization.ProductAuthorization;
+import br.com.greendrop.backend.domain.service.product.policy.ProductActionPolicy;
 import br.com.greendrop.backend.domain.service.product.rules.ProductRules;
-import br.com.greendrop.backend.domain.service.product.validation.ProductValidation;
 import br.com.greendrop.backend.domain.service.product.specification.ProductSpecification;
+import br.com.greendrop.backend.domain.service.product.validation.ProductValidation;
 import br.com.greendrop.backend.dto.product.*;
 import br.com.greendrop.backend.exception.generic.BusinessException;
 import br.com.greendrop.backend.exception.global.ErrorCode;
 import br.com.greendrop.backend.infrastructure.security.service.CurrentUserService;
 import br.com.greendrop.backend.mapper.product.ProductMapper;
+import br.com.greendrop.backend.presentation.product.ProductPresenter;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 
 /**
  * ProductService - domain orchestration for Product lifecycle.
- *
- * Responsibilities:
- *  - enforce authorization & domain rules
- *  - validate input
- *  - map DTOs ↔ entities using ProductMapper
- *  - persist via ProductRepository
  */
 @Service
 @RequiredArgsConstructor
@@ -50,106 +47,88 @@ public class ProductService {
     private final ProductValidation validation;
     private final ProductRules rules;
     private final ProductStatusHistoryService productStatusHistoryService;
+    private final ProductPresenter productPresenter;
 
     // ========================================================================
     // CREATE
     // ========================================================================
 
-    /**
-     * Create a new product owned by current authenticated user.
-     */
     public ProductResponseDTO create(ProductCreateDTO dto) {
-        if (dto == null) throw new BusinessException(ErrorCode.BAD_REQUEST);
+        if (dto == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
 
-        User user = currentUserService.getCurrentUser();
+        User currentUser = currentUserService.getCurrentUser();
 
-        // Authorization: role-based decision (throws Forbidden)
-        authorization.checkCanCreateProduct(user);
-
-        // Business rules: validate category/role constraints
-        rules.validateCategoryForRole(user, dto.category());
-
-        // Input validation (image urls etc)
+        authorization.checkCanCreateProduct(currentUser);
+        rules.validateCategoryForRole(currentUser, dto.category());
         validation.validateImageUrls(dto.imageUrls());
 
-        // Map and enrich
         Product product = productMapper.toEntity(dto);
-        product.postBy(user);
+        product.postBy(currentUser);
 
-        if (dto.imageUrls() != null && !dto.imageUrls().isEmpty()) {
-            List<ProductImage> images = dto.imageUrls().stream()
-                    .filter(Objects::nonNull)
-                    .map(url -> ProductImage.builder().url(url).build())
-                    .toList();
-
-            product.replaceImages(images);
-        }
+        applyImages(product, dto.imageUrls());
 
         productRepository.save(product);
 
-        log.info("Product created (id={} postedBy={})", product.getId(), user.getId());
+        log.info("Product created (id={}, postedBy={})",
+                product.getId(), currentUser.getId());
 
-        return productMapper.toResponse(product);
+        return toResponseWithPolicy(product, currentUser);
     }
+
 
     // ========================================================================
     // READ
     // ========================================================================
 
-    /**
-     * Read-only transactional read for single product.
-     */
     @Transactional(Transactional.TxType.SUPPORTS)
     public ProductResponseDTO getById(UUID id) {
-        return productMapper.toResponse(findOrThrow(id));
+        User currentUser = currentUserService.getCurrentUser();
+        Product product = findOrThrow(id);
+
+        return toResponseWithPolicy(product, currentUser);
     }
 
     @Transactional(Transactional.TxType.SUPPORTS)
     public List<ProductResponseDTO> getProductsByUser(UUID userId) {
+        User currentUser = currentUserService.getCurrentUser();
+
         return productRepository.findByPostedById(userId).stream()
-                .map(productMapper::toResponse)
-                .collect(Collectors.toList());
+                .map(product -> toResponseWithPolicy(product, currentUser))
+                .toList();
     }
+
 
     // ========================================================================
     // UPDATE
     // ========================================================================
-
     public ProductResponseDTO update(UUID id, ProductUpdateDTO dto) {
-        if (dto == null) throw new BusinessException(ErrorCode.BAD_REQUEST);
+        if (dto == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
 
         Product product = findOrThrow(id);
-        User current = currentUserService.getCurrentUser();
+        User currentUser = currentUserService.getCurrentUser();
 
-        // Owner or admin
-        authorization.checkOwnershipOrAdmin(product, current);
+        boolean isOwner =
+                product.getPostedBy() != null &&
+                        product.getPostedBy().getId().equals(currentUser.getId());
 
-        // Domain rule: can't update if linked to route stop
+        authorization.checkOwnershipOrAdmin(isOwner, currentUser);
         rules.ensureNotLinkedToRoute(product);
-
-        // Validate images (if present)
+        rules.validateCategoryForRole(currentUser, dto.category());
         validation.validateImageUrls(dto.imageUrls());
 
-        // If DTO includes a category, check role constraints (collector, etc.)
-        rules.validateCategoryForRole(current, dto.category());
-
-        // Apply partial update (MapStruct decorator configured to IGNORE nulls)
         productMapper.updateEntityFromDTO(dto, product);
-
-        if (dto.imageUrls() != null) {
-            List<ProductImage> images = dto.imageUrls().stream()
-                    .filter(Objects::nonNull)
-                    .map(url -> ProductImage.builder().url(url).build())
-                    .toList();
-
-            product.replaceImages(images);
-        }
+        applyImages(product, dto.imageUrls());
 
         productRepository.save(product);
 
-        log.info("Product updated (id={} by={})", product.getId(), current.getId());
+        log.info("Product updated (id={}, by={})",
+                product.getId(), currentUser.getId());
 
-        return productMapper.toResponse(product);
+        return toResponseWithPolicy(product, currentUser);
     }
 
     // ========================================================================
@@ -158,21 +137,26 @@ public class ProductService {
 
     public void softDelete(UUID id) {
         Product product = findOrThrow(id);
-        User current = currentUserService.getCurrentUser();
+        User currentUser = currentUserService.getCurrentUser();
 
-        authorization.checkOwnershipOrAdmin(product, current);
+        boolean isOwner =
+                product.getPostedBy() != null &&
+                        product.getPostedBy().getId().equals(currentUser.getId());
+
+        authorization.checkOwnershipOrAdmin(isOwner, currentUser);
         rules.ensureNotLinkedToRoute(product);
 
-        changeStatus(product, ProductStatus.DELETED, current);
+        changeStatus(product, ProductStatus.DELETED, currentUser);
 
-        log.info("Product soft-deleted (id={} by={})", product.getId(), current.getId());
+        log.info("Product soft-deleted (id={}, by={})",
+                product.getId(), currentUser.getId());
     }
 
-
     // ========================================================================
-    // LIST / FILTERING
+    // LIST / FILTERING (Page)
     // ========================================================================
 
+    @Transactional(Transactional.TxType.SUPPORTS)
     public Page<ProductResponseDTO> listProducts(
             ProductStatus status,
             ProductCategory category,
@@ -182,22 +166,27 @@ public class ProductService {
             Double weightMax,
             LocalDateTime createdFrom,
             LocalDateTime createdTo,
-            Pageable pageable) {
+            Pageable pageable
+    ) {
 
-        // List Active products if status is null as default
-        if (status == null) {
-            status = ProductStatus.PENDING;
-        }
+        ProductStatus effectiveStatus =
+                status != null ? status : ProductStatus.PENDING;
 
-        Specification<Product> spec = Specification.where(ProductSpecification.hasStatus(status))
+        Specification<Product> spec = Specification
+                .where(ProductSpecification.hasStatus(effectiveStatus))
                 .and(ProductSpecification.hasCategory(category))
                 .and(ProductSpecification.postedBy(postedBy))
                 .and(ProductSpecification.hasRouteStop(routeStopId))
                 .and(ProductSpecification.hasWeightBetween(weightMin, weightMax))
                 .and(ProductSpecification.createdBetween(createdFrom, createdTo));
 
-        return productRepository.findAll(spec, pageable).map(productMapper::toResponse);
+        User currentUser = currentUserService.getCurrentUser();
+
+        return productRepository
+                .findAll(spec, pageable)
+                .map(product -> toResponseWithPolicy(product, currentUser));
     }
+
 
     // ========================================================================
     // LIST CREATED PRODUCTS
@@ -205,32 +194,29 @@ public class ProductService {
 
     @Transactional(Transactional.TxType.SUPPORTS)
     public List<ProductResponseDTO> getMyProducts() {
-        UUID userId = currentUserService.getCurrentUserId();
+        User currentUser = currentUserService.getCurrentUser();
 
         return productRepository
-                .findByPostedByIdAndStatusNot(userId, ProductStatus.DELETED)
+                .findByPostedByIdAndStatusNot(currentUser.getId(), ProductStatus.DELETED)
                 .stream()
-                .map(productMapper::toResponse)
+                .map(product -> toResponseWithPolicy(product, currentUser))
                 .toList();
     }
 
     // ========================================================================
-// LIST CLAIMED PRODUCTS
-// ========================================================================
-    public List<ProductResponseDTO> getMyClaimedProducts() {
+    // LIST CLAIMED PRODUCTS
+    // ========================================================================
 
-        UUID collectorId = currentUserService.getCurrentUserId();
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public List<ProductResponseDTO> getMyClaimedProducts() {
+        User currentUser = currentUserService.getCurrentUser();
 
         return productRepository
-                .findByClaimedByIdAndStatus(
-                        collectorId,
-                        ProductStatus.ASSIGNED
-                )
+                .findByClaimedByIdAndStatus(currentUser.getId(), ProductStatus.ASSIGNED)
                 .stream()
-                .map(productMapper::toResponse)
+                .map(product -> toResponseWithPolicy(product, currentUser))
                 .toList();
     }
-
 
     // ========================================================================
     // Helpers
@@ -238,10 +224,51 @@ public class ProductService {
 
     private Product findOrThrow(UUID id) {
         return productRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
     }
 
-    public void changeStatus(Product product, ProductStatus newStatus, User actor) {
+    private ProductResponseDTO toResponseWithPolicy(Product product, User currentUser) {
+        ProductActionPolicy policy =
+                ProductActionPolicy.from(product, currentUser);
+
+        return productPresenter.present(product, policy);
+    }
+
+
+
+
+    /**
+     * Applies image URLs to product respecting JPA orphanRemoval.
+     * - null  → do nothing (partial update)
+     * - empty → remove all images
+     */
+    private void applyImages(Product product, List<String> imageUrls) {
+
+        if (imageUrls == null) {
+            return;
+        }
+
+        product.getImages().clear();
+
+        if (imageUrls.isEmpty()) {
+            return;
+        }
+
+        List<ProductImage> images = imageUrls.stream()
+                .filter(Objects::nonNull)
+                .map(url -> ProductImage.builder()
+                        .url(url)
+                        .product(product)
+                        .build())
+                .toList();
+
+        product.getImages().addAll(images);
+    }
+
+    public void changeStatus(Product product,
+                             ProductStatus newStatus,
+                             User actor) {
 
         ProductStatus currentStatus = product.getStatus();
 
@@ -252,7 +279,6 @@ public class ProductService {
         }
 
         product.changeStatus(newStatus);
-
         productRepository.save(product);
 
         productStatusHistoryService.recordStatusChange(
@@ -263,11 +289,6 @@ public class ProductService {
         );
     }
 
-
-// TODO: Consider extracting status transition orchestration
-//       (changeStatus + history tracking) into a dedicated
-//       ProductStatusService once product lifecycle complexity increases.
-//       For now, keeping it here avoids premature abstraction.
-
-
+    // TODO: Consider extracting status transition orchestration
+    //       into a dedicated ProductStatusService if lifecycle grows.
 }

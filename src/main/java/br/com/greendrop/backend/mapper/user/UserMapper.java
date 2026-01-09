@@ -30,6 +30,7 @@ public interface UserMapper {
     @Mapping(target = "role", ignore = true)
     @Mapping(target = "password", ignore = true)
     @Mapping(target = "points", ignore = true)
+    @Mapping(target = "active", ignore = true)
     User toEntity(UserRequestDTO dto);
 
     // -----------------------------
@@ -39,5 +40,6 @@ public interface UserMapper {
     @Mapping(target = "password", ignore = true)
     @Mapping(target = "role", ignore = true)
     @Mapping(target = "points", ignore = true)
+    @Mapping(target = "active", ignore = true)
     void updateEntity(UserUpdateDTO dto, @MappingTarget User user);
 }

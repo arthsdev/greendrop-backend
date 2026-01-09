@@ -49,7 +49,7 @@ public class SecurityConfig {
                         // PRODUCT CLAIM FLOW (COLLECTOR ONLY)
                         // =====================================================
                         .requestMatchers(HttpMethod.POST, "/api/products/*/claim")
-                        .hasRole("COLLECTOR")
+                        .authenticated()
 
                         .requestMatchers(HttpMethod.POST, "/api/products/*/unclaim")
                         .hasRole("COLLECTOR")
