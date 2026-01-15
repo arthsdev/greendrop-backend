@@ -8,32 +8,32 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * JWT authentication filter (stateless).
  *
  * Responsibilities:
- *  - Extract token from header
- *  - Validate signature + expiration (JwtService)
- *  - Check if token is revoked (TokenService)
+ *  - Extract token from Authorization header
+ *  - Validate signature + expiration
  *  - Ensure token is ACCESS type
- *  - Load UserDetails and set SecurityContext
- *
- * This filter must remain thin — heavy logic stays in services.
+ *  - Build Spring Security Authentication with ROLE_*
+ *  - Populate SecurityContext
  */
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final CustomUserDetailsService userDetailsService;
     private final TokenService tokenService;
+    private final CustomUserDetailsService userDetailsService;
 
     @Override
     protected void doFilterInternal(
@@ -49,74 +49,86 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        authenticate(token, request);
+        authenticate(token);
 
         filterChain.doFilter(request, response);
     }
 
     // ============================================================
-    // HELPERS
+    // TOKEN EXTRACTION
     // ============================================================
 
     private String extractToken(String header) {
         if (header == null) return null;
-
         if (!header.toLowerCase().startsWith("bearer ")) return null;
 
         String token = header.substring(7).trim();
-
         return token.isBlank() ? null : token;
     }
 
-    /**
-     * Lightweight validation to determine if a token should proceed to authentication.
-     */
+    // ============================================================
+    // TOKEN VALIDATION
+    // ============================================================
+
     private boolean isTokenUsable(String token) {
         if (token == null) return false;
 
-        // Validate signature + expiration
+        // Signature + expiration
         if (!jwtService.validateToken(token)) return false;
 
-        // Safely extract type
         String type;
         try {
             type = jwtService.extractType(token);
         } catch (Exception e) {
-            return false; // invalid token → ignore silently
+            return false;
         }
 
-        // Only ACCESS tokens should authenticate
-        if ("refresh".equals(type)) return false;
+        // Only ACCESS tokens authenticate requests
+        if ("access".equals(type)) {
+            return true;
+        }
 
-        // Check revocation (blacklist)
-        return !tokenService.isRefreshTokenValid(token);
+        // Refresh tokens should NEVER authenticate endpoints
+        return false;
     }
 
-    private void authenticate(String token, HttpServletRequest request) {
+    // ============================================================
+    // AUTHENTICATION
+    // ============================================================
+
+    private void authenticate(String token) {
+
+        if (SecurityContextHolder.getContext().getAuthentication() != null) {
+            return;
+        }
 
         String email = jwtService.extractEmail(token);
         String userId = jwtService.extractUserId(token);
+        String role = jwtService.extractRole(token); // USER, ADMIN, etc
 
-        if (email == null || userId == null) return;
+        if (email == null || userId == null || role == null) return;
 
-        // Avoid overriding context if already authenticated
-        if (SecurityContextHolder.getContext().getAuthentication() != null) return;
+        // Ensure user still exists (optional but recommended)
+        userDetailsService.loadUserByUsername(email);
 
-        UserDetails user = userDetailsService.loadUserByUsername(email);
-
-        if (!jwtService.isTokenValid(token, user)) return;
+        List<GrantedAuthority> authorities =
+                List.of(new SimpleGrantedAuthority("ROLE_" + role));
 
         UsernamePasswordAuthenticationToken auth =
                 new UsernamePasswordAuthenticationToken(
-                        userId,          // <-- principal (String userId)
-                        null,            // we no longer keep raw token here
-                        user.getAuthorities()
+                        userId,      // principal
+                        null,
+                        authorities
                 );
 
-        auth.setDetails(email); //  store email here
+        auth.setDetails(email);
 
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
+
+    // ============================================================
+    // FILTER SKIP
+    // ============================================================
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -126,6 +138,4 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-ui");
     }
-
-
 }

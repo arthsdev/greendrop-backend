@@ -16,6 +16,7 @@ public class CorsConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(
+                "http://localhost:4200",   //  Angular
                 "http://localhost:5173",
                 "https://greendrop.vercel.app"
         ));
