@@ -160,7 +160,6 @@ public class ProductController {
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = ProductResponseDTO.class)))
     )
     @GetMapping("/me")
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<ProductResponseDTO>> getMyProducts() {
         return ResponseEntity.ok(productService.getMyProducts());
     }
