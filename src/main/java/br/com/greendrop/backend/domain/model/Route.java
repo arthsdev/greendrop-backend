@@ -1,6 +1,5 @@
 package br.com.greendrop.backend.domain.model;
 
-import br.com.greendrop.backend.domain.model.RouteStop;
 import br.com.greendrop.backend.domain.model.enums.RouteStatus;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;

@@ -45,6 +45,24 @@ public enum ErrorCode {
             HttpStatus.BAD_REQUEST
     ),
 
+    USER_LOCATION_INVALID_LATITUDE(
+            "USER_LOCATION_INVALID_LATITUDE",
+            "error.user_location_invalid_latitude",
+            HttpStatus.BAD_REQUEST
+    ),
+
+    USER_LOCATION_INVALID_LONGITUDE(
+            "USER_LOCATION_INVALID_LONGITUDE",
+            "error.user_location_invalid_longitude",
+            HttpStatus.BAD_REQUEST
+    ),
+
+    MALFORMED_JSON(
+            "MALFORMED_JSON",
+            "error.malformed_json",
+            HttpStatus.BAD_REQUEST
+    ),
+
     // ======================================================
     // 401 — UNAUTHORIZED (authentication)
     // ======================================================

@@ -51,8 +51,6 @@ public class User implements UserDetails {
     private Role role;
 
     private String cep;
-    private Double latitude;
-    private Double longitude;
 
     @Builder.Default
     private Integer points = 0;

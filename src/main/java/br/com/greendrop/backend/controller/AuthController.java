@@ -47,8 +47,6 @@ public class AuthController {
                                           "email": "fabiano@example.com",
                                           "role": "USER",
                                           "cep": "37500-001",
-                                          "latitude": -23.55052,
-                                          "longitude": -46.633308,
                                           "points": 120
                                         }
                                         """)

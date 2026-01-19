@@ -21,7 +21,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-@Tag(name = "Routes", description = "Endpoints for Routes management")
+@Tag(name = "Route", description = "Endpoints for Routes management")
 @RestController
 @RequestMapping("/api/routes")
 @RequiredArgsConstructor

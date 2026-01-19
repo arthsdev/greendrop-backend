@@ -1,6 +1,9 @@
 package br.com.greendrop.backend.controller;
 
 import br.com.greendrop.backend.domain.service.UserService;
+import br.com.greendrop.backend.domain.service.location.UserLocationService;
+import br.com.greendrop.backend.dto.location.UserLocationRequestDTO;
+import br.com.greendrop.backend.dto.location.UserLocationResponseDTO;
 import br.com.greendrop.backend.dto.user.PasswordUpdateDTO;
 import br.com.greendrop.backend.dto.user.UserResponseDTO;
 import br.com.greendrop.backend.dto.user.UserUpdateDTO;
@@ -12,26 +15,26 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/users")
-@Tag(name = "Users", description = "User management endpoints")
+@Tag(name = "User", description = "User management endpoints")
 public class UserController {
 
     private final UserService userService;
     private final CurrentUserService currentUserService;
+    private final UserLocationService userLocationService;
 
-    public UserController(UserService userService, CurrentUserService currentUserService) {
-        this.userService = userService;
-        this.currentUserService = currentUserService;
-    }
 
     // ===============================================================
     // LIST ALL USERS (ADMIN)
@@ -60,7 +63,8 @@ public class UserController {
                                                     ]
                                                     """
                                     ))),
-                    @ApiResponse(responseCode = "403", description = "Access denied")
+                    @ApiResponse(responseCode = "403", description = "Access denied"),
+                    @ApiResponse(responseCode = "204", description = "Location not found")
             }
     )
     public Page<UserResponseDTO> listAll(Pageable pageable) {

@@ -26,11 +26,5 @@ public record UserRequestDTO(
         String password,
 
         @Schema(description = "Postal code (optional).", example = "37500-001")
-        String cep,
-
-        @Schema(description = "Latitude for geolocation (optional).", example = "-23.55052")
-        Double latitude,
-
-        @Schema(description = "Longitude for geolocation (optional).", example = "-46.633308")
-        Double longitude
+        String cep
 ) {}
