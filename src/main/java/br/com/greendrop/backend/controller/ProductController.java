@@ -34,7 +34,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-@Tag(name = "Products", description = "Product management and lifecycle endpoints")
+@Tag(name = "Product", description = "Product management and lifecycle endpoints")
 @RestController
 @RequestMapping("/api/products")
 @RequiredArgsConstructor

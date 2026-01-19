@@ -270,8 +270,6 @@ public class AuthService {
                 .password(passwordEncoder.encode(dto.password()))
                 .role(Role.USER) // default role at registration
                 .cep(dto.cep())
-                .latitude(dto.latitude())
-                .longitude(dto.longitude())
                 .active(true)
                 .build();
     }
@@ -283,8 +281,6 @@ public class AuthService {
                 user.getEmail(),
                 user.getRole(),
                 user.getCep(),
-                user.getLatitude(),
-                user.getLongitude(),
                 user.getPoints()
         );
     }

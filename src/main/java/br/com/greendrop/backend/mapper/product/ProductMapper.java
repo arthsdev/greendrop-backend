@@ -3,7 +3,6 @@ package br.com.greendrop.backend.mapper.product;
 import br.com.greendrop.backend.domain.model.Product;
 import br.com.greendrop.backend.domain.model.ProductImage;
 import br.com.greendrop.backend.domain.model.User;
-import br.com.greendrop.backend.domain.service.product.policy.ProductActionPolicy;
 import br.com.greendrop.backend.dto.product.ProductCreateDTO;
 import br.com.greendrop.backend.dto.product.ProductResponseDTO;
 import br.com.greendrop.backend.dto.product.ProductUpdateDTO;

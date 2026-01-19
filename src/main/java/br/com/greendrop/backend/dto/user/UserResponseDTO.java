@@ -24,12 +24,6 @@ public record UserResponseDTO(
         @Schema(description = "Postal code.", example = "37500-001")
         String cep,
 
-        @Schema(description = "Latitude.", example = "-23.55052")
-        Double latitude,
-
-        @Schema(description = "Longitude.", example = "-46.633308")
-        Double longitude,
-
         @Schema(description = "User eco-points.", example = "120")
         Integer points
 ) {}

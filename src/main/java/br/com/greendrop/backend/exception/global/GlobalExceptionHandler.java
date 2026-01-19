@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -31,25 +32,16 @@ public class GlobalExceptionHandler {
     //  400 — DTO Validation Errors (@Valid)
     // =====================================================================
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex,
-                                                     ServletWebRequest request) {
+    public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex, ServletWebRequest request) {
 
         Map<String, String> fieldErrors = new HashMap<>();
 
         ex.getBindingResult().getFieldErrors().forEach(error -> {
-            String message = messageSource.getMessage(
-                    error,
-                    LocaleContextHolder.getLocale()
-            );
+            String message = messageSource.getMessage(error, LocaleContextHolder.getLocale());
             fieldErrors.put(error.getField(), message);
         });
 
-        ApiError apiError = buildError(
-                ErrorCode.VALIDATION_FAILED,
-                request
-        ).toBuilder()
-                .errors(fieldErrors)
-                .build();
+        ApiError apiError = buildError(ErrorCode.VALIDATION_FAILED, request).toBuilder().errors(fieldErrors).build();
 
         return ResponseEntity.status(apiError.getStatus()).body(apiError);
     }
@@ -58,15 +50,11 @@ public class GlobalExceptionHandler {
     //  401 — Authentication failure
     // =====================================================================
     @ExceptionHandler(AuthenticationException.class)
-    public ResponseEntity<ApiError> handleAuthentication(AuthenticationException ex,
-                                                         ServletWebRequest request) {
+    public ResponseEntity<ApiError> handleAuthentication(AuthenticationException ex, ServletWebRequest request) {
 
         log.warn("Authentication failed: {}", ex.getMessage());
 
-        ApiError apiError = buildError(
-                ErrorCode.UNAUTHORIZED,
-                request
-        );
+        ApiError apiError = buildError(ErrorCode.UNAUTHORIZED, request);
 
         return ResponseEntity.status(apiError.getStatus()).body(apiError);
     }
@@ -75,15 +63,11 @@ public class GlobalExceptionHandler {
     //  403 — Access denied
     // =====================================================================
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex,
-                                                       ServletWebRequest request) {
+    public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, ServletWebRequest request) {
 
         log.warn("Access denied: {}", ex.getMessage());
 
-        ApiError apiError = buildError(
-                ErrorCode.FORBIDDEN,
-                request
-        );
+        ApiError apiError = buildError(ErrorCode.FORBIDDEN, request);
 
         return ResponseEntity.status(apiError.getStatus()).body(apiError);
     }
@@ -92,17 +76,13 @@ public class GlobalExceptionHandler {
     //  4xx — BusinessException (DOMAIN)
     // =====================================================================
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiError> handleBusinessException(BusinessException ex,
-                                                            ServletWebRequest request) {
+    public ResponseEntity<ApiError> handleBusinessException(BusinessException ex, ServletWebRequest request) {
 
         ErrorCode errorCode = ex.getErrorCode();
 
         log.warn("Business exception [{}]", errorCode.getCode());
 
-        ApiError apiError = buildError(
-                errorCode,
-                request
-        );
+        ApiError apiError = buildError(errorCode, request);
 
         return ResponseEntity.status(apiError.getStatus()).body(apiError);
     }
@@ -111,34 +91,39 @@ public class GlobalExceptionHandler {
     //  4xx / 5xx — BaseException (DOMAIN – richer)
     // =====================================================================
     @ExceptionHandler(BaseException.class)
-    public ResponseEntity<ApiError> handleBaseException(BaseException ex,
-                                                        ServletWebRequest request) {
+    public ResponseEntity<ApiError> handleBaseException(BaseException ex, ServletWebRequest request) {
 
         ErrorCode errorCode = ex.getErrorCode();
 
         log.warn("Domain exception [{}]", errorCode.getCode());
 
-        ApiError apiError = buildError(
-                errorCode,
-                request
-        );
+        ApiError apiError = buildError(errorCode, request);
 
         return ResponseEntity.status(apiError.getStatus()).body(apiError);
     }
 
     // =====================================================================
+    //  400 — Malformed JSON / Empty body
+    // =====================================================================
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiError> handleHttpMessageNotReadable(HttpMessageNotReadableException ex, ServletWebRequest request) {
+        log.warn("Invalid or missing request body: {}", ex.getMessage());
+
+        ApiError apiError = buildError(ErrorCode.MALFORMED_JSON, request);
+
+        return ResponseEntity.status(apiError.getStatus()).body(apiError);
+    }
+
+
+    // =====================================================================
     //  500 — Unhandled / unexpected exception
     // =====================================================================
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleGeneric(Exception ex,
-                                                  ServletWebRequest request) {
+    public ResponseEntity<ApiError> handleGeneric(Exception ex, ServletWebRequest request) {
 
         log.error("Unhandled exception", ex);
 
-        ApiError apiError = buildError(
-                ErrorCode.INTERNAL_ERROR,
-                request
-        );
+        ApiError apiError = buildError(ErrorCode.INTERNAL_ERROR, request);
 
         return ResponseEntity.status(apiError.getStatus()).body(apiError);
     }
@@ -148,21 +133,11 @@ public class GlobalExceptionHandler {
     // =====================================================================
 
     private ApiError buildError(ErrorCode errorCode, ServletWebRequest request) {
-        return ApiError.builder()
-                .status(errorCode.getStatus().value())
-                .code(errorCode.getCode())
-                .message(resolveMessage(errorCode))
-                .path(request.getRequest().getRequestURI())
-                .timestamp(LocalDateTime.now())
-                .build();
+        return ApiError.builder().status(errorCode.getStatus().value()).code(errorCode.getCode()).message(resolveMessage(errorCode)).path(request.getRequest().getRequestURI()).timestamp(LocalDateTime.now()).build();
     }
 
     private String resolveMessage(ErrorCode errorCode) {
-        return messageSource.getMessage(
-                errorCode.getMessageKey(),
-                null,
-                errorCode.getCode(), // fallback
-                LocaleContextHolder.getLocale()
-        );
+        return messageSource.getMessage(errorCode.getMessageKey(), null, errorCode.getCode(), // fallback
+                LocaleContextHolder.getLocale());
     }
 }
