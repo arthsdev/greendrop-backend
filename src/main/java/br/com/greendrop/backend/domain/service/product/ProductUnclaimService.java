@@ -41,21 +41,19 @@ public class ProductUnclaimService {
 
         User collector = currentUserService.getCurrentUser();
 
-        // WHO — authorization (context calculated here)
         boolean isClaimer =
                 product.getClaimedBy() != null &&
                         product.getClaimedBy().getId().equals(collector.getId());
 
+        // 4. Authorization (WHO)
         authorization.checkCanUnclaim(isClaimer, collector);
 
-        // STATE — domain rules
+        // 5. Domain rules (STATE)
         rules.ensureCanBeUnclaimed(product);
         rules.ensureNotLinkedToRoute(product);
 
-        // DOMAIN mutation (data only)
         product.removeCollector();
 
-        // STATUS + AUDIT (single source of truth)
         productService.changeStatus(
                 product,
                 ProductStatus.PENDING,

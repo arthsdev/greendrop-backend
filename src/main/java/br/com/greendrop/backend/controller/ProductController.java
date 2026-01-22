@@ -5,22 +5,21 @@ import br.com.greendrop.backend.domain.model.enums.ProductStatus;
 import br.com.greendrop.backend.domain.service.product.ProductClaimService;
 import br.com.greendrop.backend.domain.service.product.ProductService;
 import br.com.greendrop.backend.domain.service.product.ProductUnclaimService;
-import br.com.greendrop.backend.dto.product.*;
+import br.com.greendrop.backend.dto.pagination.PaginatedResponse;
+import br.com.greendrop.backend.dto.product.ProductCreateDTO;
+import br.com.greendrop.backend.dto.product.ProductResponseDTO;
+import br.com.greendrop.backend.dto.product.ProductUpdateDTO;
+import br.com.greendrop.backend.dto.product.swagger.PaginatedProductResponse;
 import br.com.greendrop.backend.exception.model.ApiError;
-
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-
 import org.springdoc.core.annotations.ParameterObject;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -28,10 +27,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.validation.Valid;
-
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Tag(name = "Product", description = "Product management and lifecycle endpoints")
@@ -115,9 +111,16 @@ public class ProductController {
             summary = "List products",
             description = "List products with filters and pagination"
     )
-    @ApiResponse(responseCode = "200", description = "Products retrieved")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Products retrieved",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = PaginatedProductResponse.class)
+            )
+    )
     @GetMapping
-    public ResponseEntity<Page<ProductResponseDTO>> list(
+    public ResponseEntity<PaginatedResponse<ProductResponseDTO>> list(
             @RequestParam(required = false) ProductStatus status,
             @RequestParam(required = false) ProductCategory category,
             @RequestParam(required = false) UUID postedBy,
@@ -153,15 +156,29 @@ public class ProductController {
     // =============================================================
     // MY PRODUCTS
     // =============================================================
-    @Operation(summary = "List products created by authenticated user")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Products retrieved",
-            content = @Content(array = @ArraySchema(schema = @Schema(implementation = ProductResponseDTO.class)))
+    @Operation(
+            summary = "List products created by authenticated user",
+            description = "Returns a paginated list of products created by the authenticated user"
     )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Products retrieved successfully",
+                    content = @Content(
+                            schema = @Schema(implementation = PaginatedProductResponse.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Authentication required",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
+            )
+    })
     @GetMapping("/me")
-    public ResponseEntity<List<ProductResponseDTO>> getMyProducts() {
-        return ResponseEntity.ok(productService.getMyProducts());
+    public ResponseEntity<PaginatedResponse<ProductResponseDTO>> getMyProducts(
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(productService.getMyProducts(pageable));
     }
 
     // =============================================================
@@ -169,24 +186,33 @@ public class ProductController {
     // =============================================================
     @Operation(
             summary = "List claimed products",
-            description = "Returns products currently claimed by the authenticated collector"
+            description = "Returns a paginated list of products currently claimed by the authenticated collector"
     )
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "Claimed products retrieved",
-                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = ProductResponseDTO.class)))
+                    description = "Claimed products retrieved successfully",
+                    content = @Content(
+                            schema = @Schema(implementation = PaginatedProductResponse.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Authentication required",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))
             ),
             @ApiResponse(
                     responseCode = "403",
-                    description = "Only collectors allowed",
+                    description = "Only collectors are allowed to access this resource",
                     content = @Content(schema = @Schema(implementation = ApiError.class))
             )
     })
-    @GetMapping("/me/claims")
     @PreAuthorize("hasRole('COLLECTOR')")
-    public ResponseEntity<List<ProductResponseDTO>> getMyClaimedProducts() {
-        return ResponseEntity.ok(productService.getMyClaimedProducts());
+    @GetMapping("/me/claims")
+    public ResponseEntity<PaginatedResponse<ProductResponseDTO>> getMyClaimedProducts(
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(productService.getMyClaimedProducts(pageable));
     }
 
     // =============================================================

@@ -45,22 +45,20 @@ public class ProductClaimService {
                 product.getPostedBy() != null &&
                         product.getPostedBy().getId().equals(collector.getId());
 
-        // WHO — authorization
+        // Authorization (WHO)
         authorization.checkCanClaimProduct(isOwner, collector);
 
-        // STATE — domain rules
+        // Domain rules (STATE)
         rules.ensureCanBeClaimed(product);
         rules.ensureNotLinkedToRoute(product);
 
-        // STATUS + AUDIT (single source of truth)
+        product.assignCollector(collector);
+
         productService.changeStatus(
                 product,
                 ProductStatus.ASSIGNED,
                 collector
         );
-
-        // DATA mutation only
-        product.assignCollector(collector);
 
         log.info(
                 "Product claimed (productId={}, collectorId={})",
@@ -70,5 +68,5 @@ public class ProductClaimService {
 
         return productMapper.toResponse(product);
     }
-
 }
+

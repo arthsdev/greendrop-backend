@@ -6,6 +6,8 @@ import br.com.greendrop.backend.domain.repository.*;
 import br.com.greendrop.backend.domain.service.route.authorization.RouteAuthorizationService;
 import br.com.greendrop.backend.domain.service.route.rules.RouteBusinessRulesService;
 import br.com.greendrop.backend.domain.service.route.validation.RouteValidationService;
+import br.com.greendrop.backend.dto.pagination.PageMetaResponse;
+import br.com.greendrop.backend.dto.pagination.PaginatedResponse;
 import br.com.greendrop.backend.dto.route.*;
 import br.com.greendrop.backend.exception.generic.BadRequestException;
 import br.com.greendrop.backend.exception.global.ErrorCode;
@@ -14,6 +16,7 @@ import br.com.greendrop.backend.mapper.route.RouteMapper;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.*;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -71,7 +74,9 @@ public class RouteService {
     }
 
     private void checkCollectionRequestsExist(List<UUID> ids) {
-        Set<UUID> found = collectionRequestRepository.findAllById(ids).stream().map(CollectionRequest::getId).collect(Collectors.toSet());
+        Set<UUID> found = collectionRequestRepository.findAllById(ids).stream()
+                .map(CollectionRequest::getId)
+                .collect(Collectors.toSet());
         List<UUID> missing = ids.stream().filter(id -> !found.contains(id)).toList();
         if (!missing.isEmpty()) throw new BadRequestException(ErrorCode.BAD_REQUEST, "route.create.missing_requests");
     }
@@ -82,7 +87,7 @@ public class RouteService {
     }
 
     // -------------------------
-    // GET ROUTES
+    // GET ROUTE
     // -------------------------
     @Transactional(readOnly = true)
     public RouteResponseDTO getRoute(UUID id) {
@@ -92,17 +97,45 @@ public class RouteService {
         return mapper.toResponse(r);
     }
 
+    // -------------------------
+// GET ROUTES FOR COLLECTOR ON DATE (PAGINATED)
+// -------------------------
     @Transactional(readOnly = true)
-    public List<RouteResponseDTO> getRoutesForCollectorOnDate(UUID collectorId, LocalDate date) {
-        if (collectorId == null || date == null) throw new BadRequestException(ErrorCode.BAD_REQUEST, "invalid_params");
-        if (!isAdminOrSelf(collectorId)) throw new BadRequestException(ErrorCode.BAD_REQUEST, "collector.forbidden");
-        List<Route> routes = routeRepository.findByRouteDateAndCollectorId(date, collectorId);
-        routes.forEach(r -> r.setStops(routeStopRepository.findByRoute_IdOrderByStopOrderAsc(r.getId())));
-        return routes.stream().map(mapper::toResponse).toList();
+    public PaginatedResponse<RouteResponseDTO> getRoutesForCollectorOnDate(
+            UUID collectorId,
+            LocalDate date,
+            Pageable pageable
+    ) {
+        // Validate input parameters
+        if (collectorId == null || date == null)
+            throw new BadRequestException(ErrorCode.BAD_REQUEST, "invalid_params");
+        if (!isAdminOrSelf(collectorId))
+            throw new BadRequestException(ErrorCode.BAD_REQUEST, "collector.forbidden");
+
+        // Fetch paginated routes from repository
+        Page<Route> page = routeRepository.findByRouteDateAndCollectorId(date, collectorId, pageable);
+
+        // Populate stops for each route and map to DTO
+        List<RouteResponseDTO> content = page.getContent().stream()
+                .peek(r -> r.setStops(routeStopRepository.findByRoute_IdOrderByStopOrderAsc(r.getId())))
+                .map(mapper::toResponse)
+                .toList();
+
+        // Create pagination metadata
+        PageMetaResponse meta = new PageMetaResponse(
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.hasNext(),
+                page.hasPrevious()
+        );
+
+        return new PaginatedResponse<>(meta, content);
     }
 
     // -------------------------
-    // UPDATE STOP
+    // UPDATE ROUTE STOP
     // -------------------------
     @Transactional
     public RouteStopDTO updateRouteStop(RouteStopUpdateDTO dto) {
@@ -127,7 +160,8 @@ public class RouteService {
 
     private boolean applyStopUpdate(RouteStop stop, RouteStopUpdateDTO dto) {
         if (dto.markDone() && stop.getStatus() != RouteStopStatus.DONE) rules.markStopDone(stop);
-        else if (dto.failureType() != null && !dto.failureType().isBlank()) rules.markStopFailed(stop, dto.failureType(), dto.failureReason(), dto.notes());
+        else if (dto.failureType() != null && !dto.failureType().isBlank())
+            rules.markStopFailed(stop, dto.failureType(), dto.failureReason(), dto.notes());
         else if (stop.getStatus() != RouteStopStatus.SKIPPED) rules.markStopSkipped(stop, dto.notes());
         else return false;
         return true;
@@ -140,7 +174,8 @@ public class RouteService {
     public void assignCollector(UUID routeId, UUID collectorId) {
         authorization.requireAdmin();
         Route r = getRouteOrThrow(routeId);
-        if (r.getStatus() != RouteStatus.PLANNED) throw new BadRequestException(ErrorCode.ROUTE_ALREADY_STARTED);
+        if (r.getStatus() != RouteStatus.PLANNED)
+            throw new BadRequestException(ErrorCode.ROUTE_ALREADY_STARTED);
         checkCollectorExists(collectorId);
         r.setCollectorId(collectorId);
         routeRepository.save(r);
@@ -155,8 +190,10 @@ public class RouteService {
             throw new BadRequestException(ErrorCode.ROUTE_ALREADY_FINISHED);
 
         List<RouteStop> stops = routeStopRepository.findByRoute_IdOrderByStopOrderAsc(r.getId());
-        if (r.getStatus() == RouteStatus.PLANNED && newStatus == RouteStatus.IN_PROGRESS) validation.validateStartPossible(r, stops);
-        else if (r.getStatus() == RouteStatus.IN_PROGRESS && newStatus == RouteStatus.COMPLETED) validation.validateCompletePossible(stops);
+        if (r.getStatus() == RouteStatus.PLANNED && newStatus == RouteStatus.IN_PROGRESS)
+            validation.validateStartPossible(r, stops);
+        else if (r.getStatus() == RouteStatus.IN_PROGRESS && newStatus == RouteStatus.COMPLETED)
+            validation.validateCompletePossible(stops);
 
         r.setStatus(newStatus);
         r.setStops(stops);
@@ -171,7 +208,8 @@ public class RouteService {
     public void addStopToRoute(UUID routeId, UUID collectionRequestId, Integer pos) {
         authorization.requireAdmin();
         Route r = getRouteOrThrow(routeId);
-        if (!collectionRequestRepository.existsById(collectionRequestId)) throw new BadRequestException(ErrorCode.BAD_REQUEST, "collection_request.not_found");
+        if (!collectionRequestRepository.existsById(collectionRequestId))
+            throw new BadRequestException(ErrorCode.BAD_REQUEST, "collection_request.not_found");
 
         List<RouteStop> stops = routeStopRepository.findByRoute_IdOrderByStopOrderAsc(routeId);
         int insertPos = (pos == null) ? stops.size() : Math.min(Math.max(pos, 0), stops.size());
@@ -186,7 +224,8 @@ public class RouteService {
     @Transactional
     public void removeStop(UUID stopId) {
         authorization.requireAdmin();
-        RouteStop s = routeStopRepository.findById(stopId).orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROUTE_STOP_NOT_FOUND));
+        RouteStop s = routeStopRepository.findById(stopId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROUTE_STOP_NOT_FOUND));
         UUID routeId = s.getRouteId();
         routeStopRepository.delete(s);
 
@@ -198,7 +237,8 @@ public class RouteService {
     @Transactional
     public void reorderStops(UUID routeId, List<UUID> ids) {
         authorization.requireAdmin();
-        if (ids == null || ids.isEmpty()) throw new BadRequestException(ErrorCode.BAD_REQUEST, "route.reorder.empty");
+        if (ids == null || ids.isEmpty())
+            throw new BadRequestException(ErrorCode.BAD_REQUEST, "route.reorder.empty");
 
         List<RouteStop> stops = routeStopRepository.findByRoute_IdOrderByStopOrderAsc(routeId);
         validation.validateReorderMatches(stops, ids);
@@ -212,7 +252,8 @@ public class RouteService {
     // HELPERS
     // -------------------------
     private Route getRouteOrThrow(UUID id) {
-        return routeRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROUTE_NOT_FOUND));
+        return routeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROUTE_NOT_FOUND));
     }
 
     private boolean isAdminOrSelf(UUID collectorId) {
@@ -225,7 +266,8 @@ public class RouteService {
         if (auth == null || !auth.isAuthenticated()) return null;
         Object p = auth.getPrincipal();
         if (p instanceof User u) return u.getId();
-        if (p instanceof UserDetails ud) return userRepository.findByEmail(ud.getUsername()).map(User::getId).orElse(null);
+        if (p instanceof UserDetails ud)
+            return userRepository.findByEmail(ud.getUsername()).map(User::getId).orElse(null);
         return null;
     }
 
@@ -234,7 +276,10 @@ public class RouteService {
         if (auth == null || !auth.isAuthenticated()) return false;
         Object p = auth.getPrincipal();
         if (p instanceof User u) return u.getRole() == Role.ADMIN;
-        if (p instanceof UserDetails ud) return userRepository.findByEmail(ud.getUsername()).map(u -> u.getRole() == Role.ADMIN).orElse(false);
+        if (p instanceof UserDetails ud)
+            return userRepository.findByEmail(ud.getUsername())
+                    .map(u -> u.getRole() == Role.ADMIN)
+                    .orElse(false);
         return false;
     }
 }
