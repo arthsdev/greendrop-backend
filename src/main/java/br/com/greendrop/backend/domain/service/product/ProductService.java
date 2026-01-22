@@ -11,12 +11,14 @@ import br.com.greendrop.backend.domain.service.product.policy.ProductActionPolic
 import br.com.greendrop.backend.domain.service.product.rules.ProductRules;
 import br.com.greendrop.backend.domain.service.product.specification.ProductSpecification;
 import br.com.greendrop.backend.domain.service.product.validation.ProductValidation;
+import br.com.greendrop.backend.dto.pagination.PaginatedResponse;
 import br.com.greendrop.backend.dto.product.*;
 import br.com.greendrop.backend.exception.generic.BusinessException;
 import br.com.greendrop.backend.exception.global.ErrorCode;
 import br.com.greendrop.backend.infrastructure.security.service.CurrentUserService;
 import br.com.greendrop.backend.mapper.product.ProductMapper;
 import br.com.greendrop.backend.presentation.product.ProductPresenter;
+import br.com.greendrop.backend.shared.PaginatedResponseFactory;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -157,7 +159,7 @@ public class ProductService {
     // ========================================================================
 
     @Transactional(Transactional.TxType.SUPPORTS)
-    public Page<ProductResponseDTO> listProducts(
+    public PaginatedResponse<ProductResponseDTO> listProducts(
             ProductStatus status,
             ProductCategory category,
             UUID postedBy,
@@ -182,25 +184,34 @@ public class ProductService {
 
         User currentUser = currentUserService.getCurrentUser();
 
-        return productRepository
-                .findAll(spec, pageable)
-                .map(product -> toResponseWithPolicy(product, currentUser));
-    }
+        Page<Product> page = productRepository.findAll(spec, pageable);
 
+        List<ProductResponseDTO> data = page.stream()
+                .map(product -> toResponseWithPolicy(product, currentUser))
+                .toList();
+
+        return PaginatedResponseFactory.from(page, data);
+    }
 
     // ========================================================================
     // LIST CREATED PRODUCTS
     // ========================================================================
 
     @Transactional(Transactional.TxType.SUPPORTS)
-    public List<ProductResponseDTO> getMyProducts() {
+    public PaginatedResponse<ProductResponseDTO> getMyProducts(Pageable pageable) {
         User currentUser = currentUserService.getCurrentUser();
 
-        return productRepository
-                .findByPostedByIdAndStatusNot(currentUser.getId(), ProductStatus.DELETED)
-                .stream()
+        Page<Product> page = productRepository.findByPostedByIdAndStatusNot(
+                currentUser.getId(),
+                ProductStatus.DELETED,
+                pageable
+        );
+
+        List<ProductResponseDTO> data = page.stream()
                 .map(product -> toResponseWithPolicy(product, currentUser))
                 .toList();
+
+        return PaginatedResponseFactory.from(page, data);
     }
 
     // ========================================================================
@@ -208,14 +219,20 @@ public class ProductService {
     // ========================================================================
 
     @Transactional(Transactional.TxType.SUPPORTS)
-    public List<ProductResponseDTO> getMyClaimedProducts() {
+    public PaginatedResponse<ProductResponseDTO> getMyClaimedProducts(Pageable pageable) {
         User currentUser = currentUserService.getCurrentUser();
 
-        return productRepository
-                .findByClaimedByIdAndStatus(currentUser.getId(), ProductStatus.ASSIGNED)
-                .stream()
-                .map(product -> toResponseWithPolicy(product, currentUser))
+        Page<Product> page = productRepository.findByClaimedByIdAndStatus(
+                currentUser.getId(),
+                ProductStatus.ASSIGNED,
+                pageable
+        );
+
+        List<ProductResponseDTO> data = page.stream()
+                .map(product ->  toResponseWithPolicy(product, currentUser))
                 .toList();
+
+        return  PaginatedResponseFactory.from(page, data);
     }
 
     // ========================================================================

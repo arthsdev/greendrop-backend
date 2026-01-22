@@ -2,12 +2,15 @@ package br.com.greendrop.backend.controller;
 
 import br.com.greendrop.backend.domain.model.enums.RouteStatus;
 import br.com.greendrop.backend.domain.service.route.RouteService;
+import br.com.greendrop.backend.dto.pagination.PaginatedResponse;
 import br.com.greendrop.backend.dto.route.RouteCreateDTO;
 import br.com.greendrop.backend.dto.route.RouteResponseDTO;
 import br.com.greendrop.backend.dto.route.RouteStopDTO;
 import br.com.greendrop.backend.dto.route.RouteStopUpdateDTO;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,7 +21,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 
 @Tag(name = "Route", description = "Endpoints for Routes management")
@@ -32,7 +34,6 @@ public class RouteController {
     // ----------------------
     // CREATE ROUTE
     // ----------------------
-
     @Operation(summary = "Create a new route", description = "Creates a collection route. ADMIN only.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Route created successfully"),
@@ -48,9 +49,8 @@ public class RouteController {
     }
 
     // ----------------------
-    // GET BY ID
+    // GET ROUTE BY ID
     // ----------------------
-
     @Operation(summary = "Get a route by ID", description = "Admin can read any route. Collector can read only routes assigned to them.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Route returned successfully"),
@@ -65,14 +65,14 @@ public class RouteController {
     }
 
     // ----------------------
-    // GET BY COLLECTOR + DATE
+    // GET ROUTES BY COLLECTOR + DATE (PAGINATED)
     // ----------------------
-
     @Operation(
             summary = "Get all routes assigned to a collector on a specific date",
             description = """
                     Admin: may read any collector's routes.
                     Collector: may only read their own.
+                    Pagination supported via query params: page, size, sort.
                     """
     )
     @ApiResponses(value = {
@@ -84,17 +84,17 @@ public class RouteController {
             @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
     })
     @GetMapping("/collector/{collectorId}")
-    public ResponseEntity<List<RouteResponseDTO>> getByCollectorAndDate(
+    public ResponseEntity<PaginatedResponse<RouteResponseDTO>> getByCollectorAndDate(
             @PathVariable UUID collectorId,
-            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @Parameter(description = "Pagination information") Pageable pageable
     ) {
-        return ResponseEntity.ok(routeService.getRoutesForCollectorOnDate(collectorId, date));
+        return ResponseEntity.ok(routeService.getRoutesForCollectorOnDate(collectorId, date, pageable));
     }
 
     // ----------------------
-    // UPDATE STOP
+    // UPDATE ROUTE STOP
     // ----------------------
-
     @Operation(
             summary = "Update a route stop status",
             description = "Used by collectors (owner) or admin to mark a stop as done, failed, or skipped."
@@ -116,7 +116,6 @@ public class RouteController {
     // ----------------------
     // ASSIGN COLLECTOR
     // ----------------------
-
     @Operation(
             summary = "Assign a collector to a route",
             description = "Admin only. Used to bind a collector to an existing route."
@@ -142,7 +141,6 @@ public class RouteController {
     // ----------------------
     // CHANGE ROUTE STATUS
     // ----------------------
-
     @Operation(
             summary = "Change route status",
             description = "Admins or collectors (depending on business rules) can update the route status."

@@ -2,6 +2,8 @@ package br.com.greendrop.backend.domain.service;
 
 import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.domain.repository.UserRepository;
+import br.com.greendrop.backend.dto.pagination.PaginatedResponse;
+import br.com.greendrop.backend.dto.pagination.PageMetaResponse;
 import br.com.greendrop.backend.dto.user.UserResponseDTO;
 import br.com.greendrop.backend.dto.user.UserUpdateDTO;
 import br.com.greendrop.backend.exception.user.PasswordInvalidException;
@@ -15,6 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -27,67 +30,59 @@ public class UserService {
     private final CurrentUserService currentUserService;
 
     // ============================================================
-    // ADMIN READ
+    // ADMIN READ (Paginated)
     // ============================================================
 
-    /**
-     * Returns a paginated list of all users. Accessible for Admins.
-     */
     @Transactional(readOnly = true)
-    public Page<UserResponseDTO> findAll(Pageable pageable) {
-        return userRepository.findAll(pageable)
-                .map(userMapper::toResponse);
+    public PaginatedResponse<UserResponseDTO> findAll(Pageable pageable) {
+        Page<User> page = userRepository.findAll(pageable);
+
+        List<UserResponseDTO> content = page.getContent()
+                .stream()
+                .map(userMapper::toResponse)
+                .toList();
+
+        PageMetaResponse meta = new PageMetaResponse(
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.hasNext(),
+                page.hasPrevious()
+        );
+
+        return new PaginatedResponse<>(meta, content);
     }
 
-    /**
-     * Finds any user by ID. Admin-only endpoint.
-     */
     @Transactional(readOnly = true)
     public UserResponseDTO findById(UUID id) {
         return userMapper.toResponse(getUserOrThrow(id));
     }
 
     // ============================================================
-    // LOGGED USER OPERATIONS (Standard Market Pattern)
+    // LOGGED USER OPERATIONS
     // ============================================================
 
-    /**
-     * Returns the profile of the currently authenticated user.
-     * This method does NOT receive an ID because logged users
-     * should not manually provide their UUID.
-     */
     @Transactional(readOnly = true)
     public UserResponseDTO getLoggedUser() {
         User user = currentUserService.getCurrentUser();
         return userMapper.toResponse(user);
     }
 
-    /**
-     * Updates profile information of the authenticated user.
-     * No ID is required; it's resolved through JWT.
-     */
     @Transactional
     public UserResponseDTO updateUserProfile(UserUpdateDTO dto) {
         User user = currentUserService.getCurrentUser();
-
-        // Partial update handled by MapStruct decorator
         userMapper.updateEntity(dto, user);
-
         userRepository.save(user);
         return userMapper.toResponse(user);
     }
 
-    /**
-     * Updates the authenticated user's password after validating the old password.
-     */
     @Transactional
     public void updatePassword(String oldPassword, String newPassword) {
         User user = currentUserService.getCurrentUser();
-
         if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
             throw new PasswordInvalidException();
         }
-
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
     }
@@ -96,9 +91,6 @@ public class UserService {
     // ADMIN DELETE
     // ============================================================
 
-    /**
-     * Deletes a user by ID. Accessible only to admins.
-     */
     @Transactional
     public void delete(UUID id) {
         if (!userRepository.existsById(id)) {
@@ -111,9 +103,6 @@ public class UserService {
     // INTERNAL HELPER
     // ============================================================
 
-    /**
-     * Retrieves a user by ID or throws an exception.
-     */
     private User getUserOrThrow(UUID id) {
         return userRepository.findById(id)
                 .orElseThrow(UserNotFoundException::new);

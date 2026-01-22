@@ -23,6 +23,16 @@ public class UserLocationService {
     private final UserLocationRepository userLocationRepository;
     private final UserLocationMapper userLocationMapper;
 
+    // ============================================================
+    // UPSERT LOCATION FOR LOGGED USER
+    // ============================================================
+
+    /**
+     * Inserts or updates the location of the currently authenticated user.
+     *
+     * @param dto latitude and longitude
+     * @return the saved location as a response DTO
+     */
     @Transactional
     public UserLocationResponseDTO upsertMyLocation(UserLocationRequestDTO dto) {
         User user = currentUserService.getCurrentUser();
@@ -50,6 +60,15 @@ public class UserLocationService {
         return userLocationMapper.toResponse(saved);
     }
 
+    // ============================================================
+    // GET LOCATION FOR LOGGED USER
+    // ============================================================
+
+    /**
+     * Retrieves the location of the currently authenticated user, if exists.
+     *
+     * @return optional response DTO with the user's location
+     */
     @Transactional(readOnly = true)
     public Optional<UserLocationResponseDTO> getMyLocation() {
         User user = currentUserService.getCurrentUser();

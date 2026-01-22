@@ -1,4 +1,4 @@
-# GreenDrop Backend
+# GreenDrop Backend API
 
 ![Java](https://img.shields.io/badge/Java-17-007396?logo=openjdk)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F?logo=springboot)
@@ -8,199 +8,275 @@
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql)
 ![Swagger](https://img.shields.io/badge/Swagger-OpenAPI%203-85EA2D?logo=swagger)
 
-------------------------------------------------------------------------
+---
 
-## 📦 Overview
+## 🚀 Overview
 
-**GreenDrop** is a backend REST API built with **Spring Boot + Java 17**, designed to support a scalable and secure platform for **product collection, routing and user location management**.
+GreenDrop is a backend REST API built with **Spring Boot** and **Java 17**, designed to support a scalable and secure platform for **product collection, routing, and user location management**.
 
-Main goals of the project:
+### Key Technologies
 
-- Secure authentication with JWT (access + refresh tokens)
-- Clear separation of responsibilities (Users, Products, Routes, Locations)
-- Internationalized error handling (i18n)
-- Redis-backed performance and security features
-- Docker-first development experience
+| Technology          | Main Use                                |
+| :------------------ | :-------------------------------------- |
+| **Java 17+**        | Primary development language            |
+| **Spring Boot 3.x** | Framework for rapid API development     |
+| **Gradle**          | Build automation tool                   |
+| **MySQL**           | Relational database                     |
+| **Redis**           | Cache and rate-limiting storage         |
+| **Docker**          | Development and deployment environment  |
+| **Swagger/OpenAPI** | Interactive API documentation           |
+| **Flyway**          | Database migration management           |
+| **MapStruct**       | Mapping DTOs to entities and vice versa |
+| **Lombok**          | Boilerplate code reduction              |
 
-------------------------------------------------------------------------
+---
 
 ## 🏗 Architecture Highlights
 
-The project follows a **clean, layered architecture**, aligned with real-world backend standards:
+* **Controller Layer** — REST endpoints and request validation.
+* **Service Layer** — Business rules and orchestration.
+* **Repository Layer** — Database access (JPA / Hibernate).
+* **DTOs** — Strict input/output contracts.
+* **Explicit Domain Behaviors** — Avoids anemic models.
+* **Presenter + Policy Pattern** — Enriched API responses and action control.
+* **Global Exception Handling** — Standardized API errors.
+* **Spring Security** — Authentication and authorization filter chain.
 
-- Controller layer — REST endpoints & request validation
-- Service layer — business rules and orchestration
-- Repository layer — database access (JPA / Hibernate)
-- DTOs — strict input/output contracts
-- Explicit domain behaviors (avoid anemic models)
-- Presenter + Policy pattern — enriched API responses
-- Global exception handling — standardized API errors
-- Spring Security filter chain — authentication & authorization
+---
 
-------------------------------------------------------------------------
+## 🔐 Authentication and Security
 
-## 🔐 Authentication & Security
+* JWT-based authentication (access + refresh tokens)
+* HttpOnly cookies for refresh tokens
+* Refresh token rotation
+* Logout invalidation via Redis
+* Role-based access control (`USER`, `ADMIN`, `COLLECTOR`)
+* Rate limiting with Redis
 
-Authentication is implemented using **JWT with access and refresh tokens**.
+### Login Response Example
 
-- Stateless authentication
-- Refresh token rotation
-- HttpOnly cookies
-- Redis-backed logout invalidation
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "expiresIn": 3600,
+  "user": {
+    "id": "c667c7bf-bfac-4b10-96be-0ec024426e9e",
+    "name": "Fabiano Teste",
+    "email": "fabiano22324@greendrop.com",
+    "role": "USER",
+    "cep": "37517-000",
+    "points": 0
+  }
+}
+```
 
-------------------------------------------------------------------------
+---
 
-## 🌍 Internationalization (i18n)
+## 🌍 Error Handling and Validation
 
-The API supports **internationalized error messages** using Spring's `MessageSource`.
+All endpoints follow a unified error response structure:
 
-Supported locales:
+```json
+{
+  "status": 400,
+  "code": "VALIDATION_FAILED",
+  "message": "Falha na validação.",
+  "path": "/api/products",
+  "timestamp": "2026-01-22T04:38:46.680954902",
+  "errors": {
+    "title": "Title is required",
+    "email": "Invalid email format"
+  }
+}
+```
 
-- pt_BR
-- en_US
-- es_ES
+---
 
-------------------------------------------------------------------------
+## 📦 Products Module
 
-## 📦 Products
+### Key Rules
 
-The Products module supports:
+* **Creation:** Only `USER` and `ADMIN` roles can create products. Collectors **cannot create**.
+* **Listing:**
 
-- Product creation by authenticated users
-- Ownership-based access control
-- Listing products belonging to the logged-in user
-- Claim / Unclaim lifecycle
-- Action-based UI support via policies
+    * `/api/products/me` — lists products belonging to the authenticated user (`USER`/`ADMIN`).
+    * `/api/products` — lists products available to collectors.
+* **Editing/Deleting:** Only owner or `ADMIN` can modify products.
+* **Claim / Unclaim Lifecycle:** Only collectors can claim. Owner cannot claim own product.
+* **Action Policy:** Flags (`canEdit`, `canDelete`, `canClaim`, `canUnclaim`) guide frontend actions.
 
-------------------------------------------------------------------------
+### Example: Create Product (POST /api/products)
 
-## 🔄 Product Claim / Unclaim Lifecycle
+```json
+{
+  "title": "Produto Teste",
+  "description": "Descrição do produto",
+  "weightKg": 0.5,
+  "quantity": 10,
+  "category": "COOKING_OIL"
+}
+```
 
-Products can be claimed and unclaimed by collectors following strict authorization and domain rules.
+**Response (201 Created)**
 
-### Claim rules
+```json
+{
+  "id": "ae460093-36ca-4781-91f0-3bc3a740ee7e",
+  "title": "Produto Teste",
+  "description": "Descrição do produto",
+  "weightKg": 0.5,
+  "quantity": 10.0,
+  "category": "COOKING_OIL",
+  "status": "PENDING",
+  "images": [],
+  "postedBy": "c667c7bf-bfac-4b10-96be-0ec024426e9e",
+  "actions": {
+    "canEdit": true,
+    "canDelete": true,
+    "canClaim": false,
+    "canUnclaim": false
+  }
+}
+```
 
-- Only collectors can claim
-- Owner cannot claim own product
-- Product must be `PENDING`
-- Product must not be already claimed
+### Example: List Products (GET /api/products)
 
-### Unclaim rules
+```json
+{
+  "meta": { "page": 0, "size": 20, "totalElements": 1, "totalPages": 1, "hasNext": false, "hasPrevious": false },
+  "data": [
+    {
+      "id": "ae460093-36ca-4781-91f0-3bc3a740ee7e",
+      "title": "Produto Teste",
+      "category": "COOKING_OIL",
+      "status": "PENDING",
+      "actions": {
+        "canEdit": true,
+        "canDelete": true,
+        "canClaim": true,
+        "canUnclaim": false
+      }
+    }
+  ]
+}
+```
 
-- Only the collector who claimed can unclaim
-- Product must be `ASSIGNED`
+### Claim / Unclaim Rules
 
-------------------------------------------------------------------------
+| Action  | Rules                                                                                                 |
+| ------- | ----------------------------------------------------------------------------------------------------- |
+| Claim   | Only collectors can claim, cannot claim own product, status must be `PENDING` and not already claimed |
+| Unclaim | Only collector who claimed can unclaim, status must be `ASSIGNED`                                     |
 
-## 🏷 Product Action Policy
+### Example: Claim Product (PATCH /api/products/{id}/claim)
 
-The `ProductActionPolicy` is a read-only object embedded in product responses to inform the frontend which actions are allowed.
+**Success (200 OK)**
 
-Available flags:
+```json
+{
+  "id": "ae460093-36ca-4781-91f0-3bc3a740ee7e",
+  "status": "ASSIGNED",
+  "claimedBy": "collector-user-id",
+  "actions": {
+    "canEdit": false,
+    "canDelete": false,
+    "canClaim": false,
+    "canUnclaim": true
+  }
+}
+```
 
-- `canEdit`
-- `canDelete`
-- `canClaim`
-- `canUnclaim`
+**Error: Owner tries to claim (403 Forbidden)**
 
-This ensures frontend consistency without leaking domain logic.
+```json
+{
+  "status": 403,
+  "code": "PRODUCT_OWNER_CANNOT_CLAIM",
+  "message": "Owner cannot claim own product"
+}
+```
 
-------------------------------------------------------------------------
+---
 
-## 📍 User Location
+## 📍 User Location Module
 
-The User Location module allows authenticated users to register and manage their current geographic position.
+* **Endpoint:** `/api/users/me/location`
+* **Create/Update:** Authenticated users can set latitude and longitude.
+* **Get Location:** Returns current location or `204 No Content` if none.
 
-### Features
+**Response Example (200 OK)**
 
-- Create or update the authenticated user's location
-- Retrieve the current user's location
-- Dedicated entity (`UserLocation`) separated from `User`
-- Explicit domain method for coordinate updates
-- Clean mapping using MapStruct
-- Debug-level logging when location is not registered
+```json
+{
+  "latitude": -25.4242,
+  "longitude": -45.4584,
+  "createdAt": "2026-01-22T04:37:28.455669Z",
+  "updatedAt": "2026-01-22T04:37:28.455669Z"
+}
+```
 
-### Design decisions
+---
 
-- Location data is not stored directly in the User entity
-- Updates are performed via explicit domain behavior
-- No direct field mutation from controllers
-- Read operations return `204 No Content` when no location exists
+## 🗺 Routes Module (In Development)
 
-This approach improves maintainability and avoids unnecessary coupling between core user data and geolocation concerns.
+* Route creation, stops, and completion
+* Planned integration with product collection workflow
 
-------------------------------------------------------------------------
+---
 
-## ⚡ Rate Limiting
+## ⚡ Pagination Standard
 
-Redis-backed rate limiting with configurable windows and limits.
+All listing endpoints return paginated responses with metadata:
 
-------------------------------------------------------------------------
+```json
+{
+  "meta": { "page": 0, "size": 20, "totalElements": 150, "totalPages": 8, "hasNext": true, "hasPrevious": false },
+  "data": [ { "id": "...", "title": "Example Product", "category": "PLASTIC", "status": "PENDING" } ]
+}
+```
 
-## 🐳 Docker
+---
 
-Full Docker Compose environment:
-
-- API
-- MySQL
-- Redis
-
-Run:
+## 🛠 How to Run (Docker)
 
 ```bash
 docker compose up --build
 ```
 
-------------------------------------------------------------------------
+Services included:
+
+* API (Spring Boot)
+* MySQL
+* Redis
+
+---
 
 ## 📘 API Documentation
 
-Swagger UI: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+[Swagger UI](http://localhost:8080/swagger-ui.html)
 
-------------------------------------------------------------------------
+---
 
 ## 🛣 Roadmap
 
 ### ✅ Current State
-- Pagination implemented on core list endpoints
-- Soft delete enabled for Users and Products
-- Role-based access control enforced via Spring Security
-- Domain-driven authorization and rule validation
-- **User location management with dedicated module**
+
+* Standardized pagination
+* Soft delete for Users and Products
+* Role-based access control enforced
+* Products module with claim/unclaim lifecycle
+* User location management
 
 ### Next Steps
-- Standardize pagination across all endpoints
-- Expose product status history for auditing
-- Improve collector route optimization
-- Introduce fine-grained permissions
-- Add metrics and monitoring
-- Expand automated test coverage
 
-------------------------------------------------------------------------
+* Expose product status history
+* Improve collector route optimization
+* Fine-grained permissions
+* Add metrics and monitoring
+* Expand automated test coverage
 
-## 📦 Modules
-
-### Users
-- User registration, login, and profile management
-- Role-based access control
-
-### Products
-- Product creation, listing, claim/unclaim lifecycle
-- Product action policy flags for frontend consistency
-
-### Routes
-- Route creation, route stops, route completion
-
-### User Location
-- Create or update current user location (latitude & longitude)
-- Get current user location
-- Validation of latitude/longitude ranges
-- Audit timestamps (`createdAt`, `updatedAt`)
-- Standardized error handling with i18n and HTTP codes
-
-------------------------------------------------------------------------
+---
 
 ## 📄 License
 
 MIT
-
