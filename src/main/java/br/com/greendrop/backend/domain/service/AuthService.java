@@ -14,6 +14,9 @@ import br.com.greendrop.backend.exception.user.ResourceNotFoundException;
 import br.com.greendrop.backend.infrastructure.security.jwt.JwtService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,34 +46,33 @@ import java.util.UUID;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
-    private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final UserRateLimitService userRateLimitService;
     private final UserCacheService userCacheService;
+    private final PasswordEncoder passwordEncoder;
     private final HttpServletRequest request;
 
     // =========================================================================
     // REGISTER
     // =========================================================================
 
-    /**
-     * Registers a new user in the system.
-     * Flow:
-     * 1) Validate that the email is not already used
-     * 2) Validate the password strength
-     * 3) Create a User entity from the request DTO
-     * 4) Persist the new User in the database
-     * 5) Return sanitized user data (UserResponseDTO)
-     */
     @Transactional
-    public UserResponseDTO register(UserRequestDTO requestDto) {
-        validateEmailNotUsed(requestDto.email());
-        validatePasswordStrength(requestDto.password());
+    public UserResponseDTO register(UserRequestDTO dto) {
+        validateEmailNotUsed(dto.email());
+        validatePasswordStrength(dto.password());
 
-        User user = createUserFromRequest(requestDto);
+        User user = User.builder()
+                .name(dto.name())
+                .email(dto.email())
+                .password(passwordEncoder.encode(dto.password()))
+                .role(Role.USER)
+                .cep(dto.cep())
+                .active(true)
+                .build();
+
         userRepository.save(user);
-
         return buildUserResponse(user);
     }
 
@@ -79,92 +81,82 @@ public class AuthService {
     // =========================================================================
 
     /**
-     * Logs a user into the system.
-     *
-     * Flow:
-     * 1) find user by e-mail
-     * 2) rate-limit protection (increment attempt counter)
-     * 3) password check
-     * 4) reset login attempts
-     * 5) issue new tokens
+     * Login flow:
+     * 1) rate-limit validation
+     * 2) authenticate credentials (Spring Security)
+     * 3) reset login attempts
+     * 4) issue access + refresh tokens
      */
     @Transactional
     public AuthTokens login(String email, String password) {
-        User user = findActiveUserByEmail(email);
 
-        validateRateLimit(user);
-        validatePassword(password, user.getPassword());
-        resetLoginAttempts(user.getId().toString());
+        // Step 1 — rate limit by email (pre-auth)
+        userRateLimitService.recordLoginAttempt(email);
 
-        // Optional: logout all devices
-        // tokenService.deleteAllUserRefreshTokens(user.getId().toString());
+        // Step 2 — authenticate
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(email, password)
+        );
 
+        User user = (User) authentication.getPrincipal();
+
+        // Step 3 — post-auth success handling
+        handleSuccessfulLogin(user);
+
+        // Step 4 — issue tokens
         return issueNewSessionTokens(user);
+    }
+
+    private void handleSuccessfulLogin(User user) {
+        userCacheService.clearLoginAttempts(user.getId().toString());
     }
 
     // =========================================================================
     // REFRESH TOKEN
     // =========================================================================
 
-    /**
-     * Refreshes authentication using JTI rotation.
-     *
-     * Steps:
-     * 1) check non-null token
-     * 2) ensure type = "refresh"
-     * 3) structural JWT validation
-     * 4) ensure the JTI hash exists in Redis
-     * 5) load user from DB
-     * 6) rotate: delete old JTI → generate new JTI → save hash → create new token
-     * 7) issue new access token
-     */
     @Transactional
-    public AuthTokens refresh(String oldRefreshToken) {
+    public AuthTokens refresh(String refreshToken) {
 
-        if (oldRefreshToken == null || oldRefreshToken.isBlank())
+        if (refreshToken == null || refreshToken.isBlank())
             throw new MissingTokenException();
 
-        // Must explicitly be a refresh token
-        if (!"refresh".equals(jwtService.extractType(oldRefreshToken)))
+        if (!"refresh".equals(jwtService.extractType(refreshToken)))
             throw new InvalidTokenException();
 
-        // Structural validation (signature, expiration)
-        if (!jwtService.validateToken(oldRefreshToken))
+        if (!jwtService.validateToken(refreshToken))
             throw new InvalidTokenException();
 
-        // JTI validation (hash stored in Redis)
-        if (!tokenService.isRefreshTokenValid(oldRefreshToken))
+        if (!tokenService.isRefreshTokenValid(refreshToken))
             throw new InvalidTokenException();
 
-        UUID userId = UUID.fromString(jwtService.extractUserId(oldRefreshToken));
+        UUID userId = UUID.fromString(jwtService.extractUserId(refreshToken));
         User user = findActiveUserById(userId);
 
-        // Rotate refresh token
-        String newRefresh = tokenService.rotateRefreshToken(oldRefreshToken, user);
-
-        // Create new access token
+        String newRefresh = tokenService.rotateRefreshToken(refreshToken, user);
         String newAccess = jwtService.generateAccessToken(user);
 
-        return new AuthTokens(newAccess, newRefresh,
+        return new AuthTokens(
+                newAccess,
+                newRefresh,
                 jwtService.getAccessTokenExpirationSeconds(),
-                buildUserResponse(user));
+                buildUserResponse(user)
+        );
     }
 
     // =========================================================================
     // LOGOUT
     // =========================================================================
 
-    /**
-     * Logs out the user by revoking the refresh token.
-     */
     @Transactional
     public void logout(String refreshToken) {
-        if (refreshToken == null || refreshToken.isBlank()) return;
-        tokenService.revokeRefreshToken(refreshToken);
+        if (refreshToken != null && !refreshToken.isBlank()) {
+            tokenService.revokeRefreshToken(refreshToken);
+        }
     }
 
     // =========================================================================
-    // PRIVATE VALIDATION HELPERS
+    // HELPERS
     // =========================================================================
 
     private void validateEmailNotUsed(String email) {
@@ -173,19 +165,10 @@ public class AuthService {
         }
     }
 
-    private void validateRateLimit(User user) {
-        // Will throw if too many attempts
-        userRateLimitService.recordLoginAttempt(user.getId().toString());
-    }
-
-    private User findActiveUserByEmail(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(InvalidCredentialsException::new);
-
-        if (!user.isActive())
-            throw new UserInactiveException();
-
-        return user;
+    private void validatePasswordStrength(String password) {
+        if (password == null || password.length() < 8) {
+            throw new InvalidCredentialsException();
+        }
     }
 
     private User findActiveUserById(UUID id) {
@@ -198,42 +181,14 @@ public class AuthService {
         return user;
     }
 
-    private void resetLoginAttempts(String userId) {
-        userCacheService.clearLoginAttempts(userId);
-    }
-
-    private void validatePassword(String raw, String encoded) {
-        if (!passwordEncoder.matches(raw, encoded))
-            throw new InvalidCredentialsException();
-    }
-
-    private void validatePasswordStrength(String password) {
-        if (password == null || password.length() < 8)
-            throw new InvalidCredentialsException();
-    }
-
-    // =========================================================================
-    // TOKEN ISSUANCE
-    // =========================================================================
-
-    /**
-     * Creates a new authentication session:
-     * ▸ generates access token
-     * ▸ generates refresh token + persists its JTI hash
-     */
     private AuthTokens issueNewSessionTokens(User user) {
 
         String access = jwtService.generateAccessToken(user);
         String refresh = tokenService.createAndStoreRefreshToken(user);
 
-        // Optional metadata tracking (for auditing, sessions, logs)
-        String userAgent = safeHeader("User-Agent");
-        String deviceName = safeHeader("X-Device-Name");
-        if (deviceName == null || deviceName.isBlank()) deviceName = userAgent;
-
+        // Optional metadata (future-proof)
         String ip = extractClientIp();
-
-        // NOTE: if you want DB session tracking, build it here.
+        String device = safeHeader("User-Agent");
 
         return new AuthTokens(
                 access,
@@ -245,8 +200,8 @@ public class AuthService {
 
     private String safeHeader(String name) {
         try {
-            String v = request.getHeader(name);
-            return (v == null || v.isBlank()) ? null : v;
+            String value = request.getHeader(name);
+            return (value == null || value.isBlank()) ? null : value;
         } catch (Exception e) {
             return null;
         }
@@ -255,23 +210,12 @@ public class AuthService {
     private String extractClientIp() {
         try {
             String xff = request.getHeader("X-Forwarded-For");
-            if (xff != null && !xff.isBlank())
-                return xff.split(",")[0].trim();
-            return request.getRemoteAddr();
+            return (xff != null && !xff.isBlank())
+                    ? xff.split(",")[0].trim()
+                    : request.getRemoteAddr();
         } catch (Exception e) {
             return "unknown";
         }
-    }
-
-    private User createUserFromRequest(UserRequestDTO dto) {
-        return User.builder()
-                .name(dto.name())
-                .email(dto.email())
-                .password(passwordEncoder.encode(dto.password()))
-                .role(Role.USER) // default role at registration
-                .cep(dto.cep())
-                .active(true)
-                .build();
     }
 
     private UserResponseDTO buildUserResponse(User user) {

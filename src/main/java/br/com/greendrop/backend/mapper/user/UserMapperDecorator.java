@@ -8,9 +8,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * Decorator responsible for sanitizing user input
- * (trim, whitespace normalization, email lowercase).
- * No business rules should live here.
+ * Decorator responsible for sanitizing user input:
+ * - trims strings
+ * - normalizes whitespace
+ * - converts email to lowercase
+ *
+ * No business logic should live here.
  */
 @Slf4j
 public abstract class UserMapperDecorator implements UserMapper {
@@ -33,6 +36,7 @@ public abstract class UserMapperDecorator implements UserMapper {
 
     @Override
     public UserResponseDTO toResponse(User user) {
+        // N+1 safe because user is already fully loaded by service
         return delegate.toResponse(user);
     }
 

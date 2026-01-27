@@ -5,7 +5,7 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 
-@Schema(description = "Payload to create or update the current user's location")
+@Schema(description = "Payload to create or update your location")
 public record UserLocationRequestDTO(
 
         @NotNull
@@ -20,4 +20,3 @@ public record UserLocationRequestDTO(
         @Schema(description = "Longitude of the user", example = "-45.4584")
         Double longitude
 ) {}
-

@@ -20,6 +20,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Service class responsible for User-related business logic.
+ *
+ * Best practices applied:
+ * - Uses repository methods with @EntityGraph to prevent N+1.
+ * - All read operations map entities to DTOs before returning to avoid lazy-loading issues.
+ * - Transaction readOnly flag applied for read operations.
+ */
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -33,9 +41,13 @@ public class UserService {
     // ADMIN READ (Paginated)
     // ============================================================
 
+    /**
+     * Returns all users paginated.
+     * Uses findAllWithRelations to fetch roles/profile in one query (N+1 safe).
+     */
     @Transactional(readOnly = true)
     public PaginatedResponse<UserResponseDTO> findAll(Pageable pageable) {
-        Page<User> page = userRepository.findAll(pageable);
+        Page<User> page = userRepository.findAllWithRelations(pageable);
 
         List<UserResponseDTO> content = page.getContent()
                 .stream()
@@ -54,6 +66,10 @@ public class UserService {
         return new PaginatedResponse<>(meta, content);
     }
 
+    /**
+     * Returns a single user by ID.
+     * Uses N+1 safe getUserOrThrow helper.
+     */
     @Transactional(readOnly = true)
     public UserResponseDTO findById(UUID id) {
         return userMapper.toResponse(getUserOrThrow(id));
@@ -63,12 +79,20 @@ public class UserService {
     // LOGGED USER OPERATIONS
     // ============================================================
 
+    /**
+     * Returns the currently logged-in user's data.
+     * N+1 safe: loads user aggregate with required associations eagerly.
+     */
     @Transactional(readOnly = true)
     public UserResponseDTO getLoggedUser() {
-        User user = currentUserService.getCurrentUser();
-        return userMapper.toResponse(user);
+        UUID userId = currentUserService.getCurrentUserId();
+        return userMapper.toResponse(getUserOrThrow(userId));
     }
 
+    /**
+     * Updates the profile of the currently logged-in user.
+     * Only updates fields directly on User entity.
+     */
     @Transactional
     public UserResponseDTO updateUserProfile(UserUpdateDTO dto) {
         User user = currentUserService.getCurrentUser();
@@ -77,6 +101,10 @@ public class UserService {
         return userMapper.toResponse(user);
     }
 
+    /**
+     * Updates the password of the currently logged-in user.
+     * Validates old password before saving.
+     */
     @Transactional
     public void updatePassword(String oldPassword, String newPassword) {
         User user = currentUserService.getCurrentUser();
@@ -91,6 +119,10 @@ public class UserService {
     // ADMIN DELETE
     // ============================================================
 
+    /**
+     * Deletes a user by ID.
+     * Checks existence first to prevent unnecessary exceptions.
+     */
     @Transactional
     public void delete(UUID id) {
         if (!userRepository.existsById(id)) {
@@ -103,8 +135,13 @@ public class UserService {
     // INTERNAL HELPER
     // ============================================================
 
+    /**
+     * Helper to fetch a user by ID with all important relations.
+     * Centralizes the "fetch or throw" pattern.
+     * Prevents N+1 when mapping to DTO.
+     */
     private User getUserOrThrow(UUID id) {
-        return userRepository.findById(id)
+        return userRepository.findByIdWithRelations(id)
                 .orElseThrow(UserNotFoundException::new);
     }
 }

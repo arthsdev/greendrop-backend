@@ -1,6 +1,5 @@
 package br.com.greendrop.backend.domain.service.location;
 
-import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.domain.model.UserLocation;
 import br.com.greendrop.backend.domain.repository.UserLocationRepository;
 import br.com.greendrop.backend.dto.location.UserLocationRequestDTO;
@@ -14,7 +13,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.util.UUID;
 
+/**
+ * Service to handle user location operations.
+ * Uses user IDs instead of full User objects to avoid N+1 issues.
+ * Supports upsert (insert or update) for location safely.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -24,48 +29,50 @@ public class UserLocationService {
     private final UserLocationRepository userLocationRepository;
     private final UserLocationMapper userLocationMapper;
 
-    // ============================================================
-    // UPSERT LOCATION FOR LOGGED USER
-    // ============================================================
+    // -----------------------------
+    // UPSERT LOCATION
+    // -----------------------------
 
     /**
-     * Inserts or updates the location of the currently authenticated user.
-     * Safe against concurrent requests and idempotent.
+     * Insert or update the current user's location.
+     * Safe for concurrent requests.
      *
-     * @param dto latitude and longitude
-     * @return the saved location as a response DTO
+     * @param dto contains latitude and longitude
+     * @return the saved location as a DTO
      */
     @Transactional
     public UserLocationResponseDTO upsertMyLocation(UserLocationRequestDTO dto) {
-        User user = currentUserService.getCurrentUser();
+        UUID userId = currentUserService.getCurrentUser().getId();
 
-        log.debug("Upserting location for user {}", user.getId());
+        log.debug("Upserting location for user {}", userId);
 
-        userLocationRepository.upsertLocation(user.getId(), dto.latitude(), dto.longitude());
+        // Upsert in DB (atomic)
+        userLocationRepository.upsertLocation(userId, dto.latitude(), dto.longitude());
 
-        UserLocation saved = userLocationRepository.findByUser(user)
-                .orElseThrow(() -> new UserLocationNotFoundException(user.getId()));
+        // Fetch updated location by userId (avoids lazy loading / N+1)
+        UserLocation saved = userLocationRepository.findByUserId(userId)
+                .orElseThrow(() -> new UserLocationNotFoundException(userId));
 
         log.debug("Location saved for user {} (lat={}, lon={})",
-                user.getId(), saved.getLatitude(), saved.getLongitude());
+                userId, saved.getLatitude(), saved.getLongitude());
 
         return userLocationMapper.toResponse(saved);
     }
 
-    // ============================================================
-    // GET LOCATION FOR LOGGED USER
-    // ============================================================
+    // -----------------------------
+    // GET LOCATION
+    // -----------------------------
 
     /**
-     * Retrieves the location of the currently authenticated user, if exists.
+     * Get the current user's location if it exists.
      *
-     * @return optional response DTO with the user's location
+     * @return optional DTO with location
      */
     @Transactional(readOnly = true)
     public Optional<UserLocationResponseDTO> getMyLocation() {
-        User user = currentUserService.getCurrentUser();
+        UUID userId = currentUserService.getCurrentUser().getId();
 
-        return userLocationRepository.findByUser(user)
+        return userLocationRepository.findByUserId(userId)
                 .map(userLocationMapper::toResponse);
     }
 }
