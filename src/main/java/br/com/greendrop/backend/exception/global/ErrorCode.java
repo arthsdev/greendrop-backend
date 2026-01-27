@@ -181,6 +181,12 @@ public enum ErrorCode {
             HttpStatus.NOT_FOUND
     ),
 
+    USER_LOCATION_NOT_FOUND(
+            "USER_LOCATION_NOT_FOUND",
+            "user.location.not_found",
+            HttpStatus.NOT_FOUND
+    ),
+
     // ======================================================
     // 409 — CONFLICT (invalid resource state)
     // ======================================================

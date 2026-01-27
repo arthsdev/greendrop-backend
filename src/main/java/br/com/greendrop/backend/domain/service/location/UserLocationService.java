@@ -5,6 +5,7 @@ import br.com.greendrop.backend.domain.model.UserLocation;
 import br.com.greendrop.backend.domain.repository.UserLocationRepository;
 import br.com.greendrop.backend.dto.location.UserLocationRequestDTO;
 import br.com.greendrop.backend.dto.location.UserLocationResponseDTO;
+import br.com.greendrop.backend.exception.user.UserLocationNotFoundException;
 import br.com.greendrop.backend.infrastructure.security.service.CurrentUserService;
 import br.com.greendrop.backend.mapper.location.UserLocationMapper;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class UserLocationService {
 
     /**
      * Inserts or updates the location of the currently authenticated user.
+     * Safe against concurrent requests and idempotent.
      *
      * @param dto latitude and longitude
      * @return the saved location as a response DTO
@@ -37,25 +39,15 @@ public class UserLocationService {
     public UserLocationResponseDTO upsertMyLocation(UserLocationRequestDTO dto) {
         User user = currentUserService.getCurrentUser();
 
-        UserLocation location = userLocationRepository
-                .findByUser(user)
-                .orElseGet(() -> {
-                    log.debug("Creating new location for user {}", user.getId());
-                    return UserLocation.builder()
-                            .user(user)
-                            .build();
-                });
+        log.debug("Upserting location for user {}", user.getId());
 
-        location.updateCoordinates(dto.latitude(), dto.longitude());
+        userLocationRepository.upsertLocation(user.getId(), dto.latitude(), dto.longitude());
 
-        UserLocation saved = userLocationRepository.save(location);
+        UserLocation saved = userLocationRepository.findByUser(user)
+                .orElseThrow(() -> new UserLocationNotFoundException(user.getId()));
 
-        log.debug(
-                "Location saved for user {} (lat={}, lon={})",
-                user.getId(),
-                saved.getLatitude(),
-                saved.getLongitude()
-        );
+        log.debug("Location saved for user {} (lat={}, lon={})",
+                user.getId(), saved.getLatitude(), saved.getLongitude());
 
         return userLocationMapper.toResponse(saved);
     }
@@ -73,12 +65,7 @@ public class UserLocationService {
     public Optional<UserLocationResponseDTO> getMyLocation() {
         User user = currentUserService.getCurrentUser();
 
-        Optional<UserLocation> location = userLocationRepository.findByUser(user);
-
-        if (location.isEmpty()) {
-            log.debug("User {} has no location registered", user.getId());
-        }
-
-        return location.map(userLocationMapper::toResponse);
+        return userLocationRepository.findByUser(user)
+                .map(userLocationMapper::toResponse);
     }
 }

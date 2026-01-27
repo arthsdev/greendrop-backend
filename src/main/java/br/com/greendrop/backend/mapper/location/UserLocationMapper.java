@@ -8,9 +8,6 @@ import org.mapstruct.Mapper;
  * Mapper interface for converting {@link UserLocation} entities
  * to {@link UserLocationResponseDTO} DTOs.
  * Uses MapStruct for compile-time mapping generation.
- *
- * Note: All validation and business rules are handled in the {@link UserLocation}
- * entity itself. This mapper is only responsible for mapping to the response DTO.
  */
 @Mapper(componentModel = "spring")
 public interface UserLocationMapper {
