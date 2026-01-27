@@ -1,11 +1,10 @@
 package br.com.greendrop.backend.infrastructure.security.jwt;
 
-import br.com.greendrop.backend.domain.service.TokenService;
-import br.com.greendrop.backend.infrastructure.security.service.CustomUserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -17,39 +16,25 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 
-/**
- * JWT authentication filter (stateless).
- *
- * Responsibilities:
- *  - Extract token from Authorization header
- *  - Validate signature + expiration
- *  - Ensure token is ACCESS type
- *  - Build Spring Security Authentication with ROLE_*
- *  - Populate SecurityContext
- */
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final String BEARER_PREFIX = "bearer ";
+    private static final String ACCESS_TOKEN_TYPE = "access";
+
     private final JwtService jwtService;
-    private final TokenService tokenService;
-    private final CustomUserDetailsService userDetailsService;
 
     @Override
     protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
 
-        String token = extractToken(request.getHeader("Authorization"));
-
-        if (!isTokenUsable(token)) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        authenticate(token);
+        extractToken(request)
+                .filter(this::isAccessToken)
+                .ifPresent(this::authenticate);
 
         filterChain.doFilter(request, response);
     }
@@ -58,38 +43,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     // TOKEN EXTRACTION
     // ============================================================
 
-    private String extractToken(String header) {
-        if (header == null) return null;
-        if (!header.toLowerCase().startsWith("bearer ")) return null;
+    private java.util.Optional<String> extractToken(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+
+        if (header == null) return java.util.Optional.empty();
+        if (!header.toLowerCase().startsWith(BEARER_PREFIX)) return java.util.Optional.empty();
 
         String token = header.substring(7).trim();
-        return token.isBlank() ? null : token;
+        return token.isBlank()
+                ? java.util.Optional.empty()
+                : java.util.Optional.of(token);
     }
 
     // ============================================================
     // TOKEN VALIDATION
     // ============================================================
 
-    private boolean isTokenUsable(String token) {
-        if (token == null) return false;
-
-        // Signature + expiration
-        if (!jwtService.validateToken(token)) return false;
-
-        String type;
-        try {
-            type = jwtService.extractType(token);
-        } catch (Exception e) {
+    private boolean isAccessToken(String token) {
+        if (!jwtService.validateToken(token)) {
             return false;
         }
 
-        // Only ACCESS tokens authenticate requests
-        if ("access".equals(type)) {
-            return true;
-        }
-
-        // Refresh tokens should NEVER authenticate endpoints
-        return false;
+        return ACCESS_TOKEN_TYPE.equalsIgnoreCase(
+                jwtService.extractType(token)
+        );
     }
 
     // ============================================================
@@ -102,28 +79,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        String email = jwtService.extractEmail(token);
         String userId = jwtService.extractUserId(token);
-        String role = jwtService.extractRole(token); // USER, ADMIN, etc
+        String email  = jwtService.extractEmail(token);
+        String role   = jwtService.extractRole(token);
 
-        if (email == null || userId == null || role == null) return;
+        if (userId == null || email == null || role == null) {
+            return;
+        }
 
-        // Ensure user still exists (optional but recommended)
-        userDetailsService.loadUserByUsername(email);
+        List<GrantedAuthority> authorities = List.of(
+                new SimpleGrantedAuthority("ROLE_" + role)
+        );
 
-        List<GrantedAuthority> authorities =
-                List.of(new SimpleGrantedAuthority("ROLE_" + role));
-
-        UsernamePasswordAuthenticationToken auth =
+        /*
+         * Authentication Contract:
+         * - principal = userId (UUID as String)
+         * - credentials = null
+         * - details = email
+         */
+        UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(
-                        userId,      // principal
+                        userId,
                         null,
                         authorities
                 );
 
-        auth.setDetails(email);
+        authentication.setDetails(email);
 
-        SecurityContextHolder.getContext().setAuthentication(auth);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
     // ============================================================

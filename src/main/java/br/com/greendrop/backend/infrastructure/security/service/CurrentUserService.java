@@ -59,9 +59,7 @@ public class CurrentUserService {
      * Loads the User domain entity using the authenticated user ID.
      */
     public User getCurrentUser() {
-        UUID userId = getCurrentUserId();
-
-        return userRepository.findById(userId)
+        return userRepository.findById(getCurrentUserId())
                 .orElseThrow(ResourceNotFoundException::new);
     }
 }

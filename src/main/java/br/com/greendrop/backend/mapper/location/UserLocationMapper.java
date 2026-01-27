@@ -5,18 +5,18 @@ import br.com.greendrop.backend.dto.location.UserLocationResponseDTO;
 import org.mapstruct.Mapper;
 
 /**
- * Mapper interface for converting {@link UserLocation} entities
- * to {@link UserLocationResponseDTO} DTOs.
- * Uses MapStruct for compile-time mapping generation.
+ * Converts UserLocation entities into DTOs.
+ * Uses MapStruct to generate mapping code at compile time.
+ * Only maps to response DTOs; no reverse mapping needed.
  */
 @Mapper(componentModel = "spring")
 public interface UserLocationMapper {
 
     /**
-     * Converts a {@link UserLocation} entity to a {@link UserLocationResponseDTO}.
+     * Convert UserLocation entity to a response DTO.
      *
-     * @param entity the user location entity
-     * @return the corresponding response DTO
+     * @param entity the UserLocation entity
+     * @return a simple DTO with coordinates and timestamps
      */
     UserLocationResponseDTO toResponse(UserLocation entity);
 }
