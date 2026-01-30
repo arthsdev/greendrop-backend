@@ -13,13 +13,42 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Represents a product listed by a user for collection.
+ * Product listed by a user for collection.
  *
- * Domain rules:
- * - Product does NOT decide business flows
- * - Product does NOT choose next status
- * - Status changes are validated here, but orchestrated by services
+ * Responsibilities:
+ * - Does not orchestrate business flows.
+ * - Does not decide status transitions.
+ * - Only validates transitions; orchestration lives in domain services.
+ *
+ * Performance:
+ * - Uses NamedEntityGraphs to optimize read operations.
+ * - Graphs are selected per use case.
+ *
+ * EntityGraphs:
+ * - Product.list: lists and dashboards (postedBy, claimedBy).
+ * - Product.detail: detail views (postedBy, claimedBy, images).
+ *
+ * Heavier relations (e.g. routeStop) are excluded from default graphs
+ * and must be fetched explicitly.
  */
+
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "Product.list",
+                attributeNodes = {
+                        @NamedAttributeNode("postedBy"),
+                        @NamedAttributeNode("claimedBy")
+                }
+        ),
+        @NamedEntityGraph(
+                name = "Product.detail",
+                attributeNodes = {
+                        @NamedAttributeNode("postedBy"),
+                        @NamedAttributeNode("claimedBy"),
+                        @NamedAttributeNode("images")
+                }
+        )
+})
 @Entity
 @Table(name = "product")
 @Getter
