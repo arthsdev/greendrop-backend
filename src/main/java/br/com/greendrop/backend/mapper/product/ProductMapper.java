@@ -2,9 +2,9 @@ package br.com.greendrop.backend.mapper.product;
 
 import br.com.greendrop.backend.domain.model.Product;
 import br.com.greendrop.backend.domain.model.ProductImage;
-import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.dto.product.ProductCreateDTO;
-import br.com.greendrop.backend.dto.product.ProductResponseDTO;
+import br.com.greendrop.backend.dto.product.ProductDetailResponseDTO;
+import br.com.greendrop.backend.dto.product.ProductListResponseDTO;
 import br.com.greendrop.backend.dto.product.ProductUpdateDTO;
 import org.mapstruct.*;
 
@@ -30,23 +30,24 @@ public interface ProductMapper {
     void updateEntityFromDTO(ProductUpdateDTO dto, @MappingTarget Product entity);
 
     // =========================
-    // Entity → Response
+    // Entity → LIST response
     // =========================
 
-    @Mapping(target = "postedBy", source = "postedBy", qualifiedByName = "mapUserToUUID")
+    @Mapping(target = "postedBy", source = "postedBy.id")
+    ProductListResponseDTO toListResponse(Product product);
+
+    // =========================
+    // Entity → DETAIL response
+    // =========================
+
+    @Mapping(target = "postedBy", source = "postedBy.id")
+    @Mapping(target = "claimedBy", source = "claimedBy.id")
     @Mapping(target = "images", source = "images", qualifiedByName = "mapImages")
-    ProductResponseDTO toResponse(Product entity);
-
-    List<ProductResponseDTO> toResponseList(List<Product> products);
+    ProductDetailResponseDTO toDetailResponse(Product product);
 
     // =========================
-    // Custom mappers
+    // Helpers
     // =========================
-
-    @Named("mapUserToUUID")
-    static UUID mapUserToUUID(User user) {
-        return user != null ? user.getId() : null;
-    }
 
     @Named("mapImages")
     static List<String> mapImages(List<ProductImage> images) {

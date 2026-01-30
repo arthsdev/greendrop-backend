@@ -63,6 +63,7 @@ public enum ErrorCode {
             HttpStatus.BAD_REQUEST
     ),
 
+
     // ======================================================
     // 401 — UNAUTHORIZED (authentication)
     // ======================================================
@@ -145,6 +146,12 @@ public enum ErrorCode {
     PRODUCT_UNCLAIM_FORBIDDEN(
             "PRODUCT_UNCLAIM_FORBIDDEN",
             "error.product.unclaim_forbidden",
+            HttpStatus.FORBIDDEN
+    ),
+
+    NOT_OWNER_OF_CLAIM(
+            "NOT_OWNER_OF_CLAIM",
+            "error.product.claim.not_owner",
             HttpStatus.FORBIDDEN
     ),
 
@@ -291,6 +298,12 @@ public enum ErrorCode {
     PRODUCT_ALREADY_DELETED(
             "PRODUCT_ALREADY_DELETED",
             "error.product.already_deleted",
+            HttpStatus.CONFLICT
+    ),
+
+    NOT_ALLOWED_TO_CLAIM_OWN_PRODUCT(
+            "NOT_ALLOWED_TO_CLAIM_OWN_PRODUCT",
+            "error.product.claim.own_product",
             HttpStatus.CONFLICT
     ),
 

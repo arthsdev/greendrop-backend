@@ -5,28 +5,20 @@ import br.com.greendrop.backend.domain.model.User;
 import br.com.greendrop.backend.domain.model.enums.ProductStatus;
 import br.com.greendrop.backend.domain.model.enums.Role;
 
+import java.util.UUID;
+
 /**
- * ProductActionPolicy
+ * Defines which actions the current user can perform
+ * on a Product.
  *
- * <p>
- * Represents the set of actions that the current authenticated user
- * is allowed to perform on a given Product, based on:
- * <ul>
- *   <li>Product state</li>
- *   <li>User role</li>
- *   <li>User relationship to the product (creator / collector)</li>
- * </ul>
+ * Read-only policy used to expose available actions
+ * to the presentation layer.
  *
- * This class:
- * <ul>
- *   <li>Does NOT throw exceptions</li>
- *   <li>Does NOT modify product state</li>
- *   <li>Does NOT perform authorization checks</li>
- * </ul>
+ * Does not perform authorization checks, throw exceptions,
+ * or modify product state.
  *
- * It is intended to be used as a read-only policy object
- * to inform frontend behavior.
- * </p>
+ * Usage:
+ *   ProductActionPolicy.from(product, currentUser);
  */
 public class ProductActionPolicy {
 
@@ -47,9 +39,9 @@ public class ProductActionPolicy {
         this.canUnclaim = canUnclaim;
     }
 
-     /* ===============================
-        Domain questions
-        =============================== */
+    // =====================================================
+    // Read-only accessors (used by Presenter / Frontend)
+    // =====================================================
 
     public boolean canEdit() {
         return canEdit;
@@ -67,46 +59,81 @@ public class ProductActionPolicy {
         return canUnclaim;
     }
 
+    // =====================================================
+    // Factory
+    // =====================================================
 
     public static ProductActionPolicy from(Product product, User user) {
+
+        if (product == null || user == null) {
+            return denyAll();
+        }
+
+        UUID userId = user.getId();
 
         // -------------------------------------------------
         // User ↔ Product relationship
         // -------------------------------------------------
-        boolean isCreator = product.getPostedBy().getId().equals(user.getId());
+        boolean isCreator = isSameUser(product.getPostedBy(), userId);
         boolean isCollector = user.hasRole(Role.COLLECTOR);
-        boolean isCurrentCollector =
-                product.getClaimedBy() != null &&
-                        product.getClaimedBy().getId().equals(user.getId());
-
+        boolean isCurrentCollector = isSameUser(product.getClaimedBy(), userId);
 
         // -------------------------------------------------
         // Product state
         // -------------------------------------------------
-        boolean isPending = product.getStatus() == ProductStatus.PENDING;
-        boolean isAssigned = product.getStatus() == ProductStatus.ASSIGNED;
+        ProductStatus status = product.getStatus();
+
+        boolean isPending = status == ProductStatus.PENDING;
+        boolean isAssigned = status == ProductStatus.ASSIGNED;
         boolean hasCollector = product.isClaimed();
         boolean hasRoute = product.getRouteStop() != null;
 
         // -------------------------------------------------
         // Allowed actions
         // -------------------------------------------------
-        boolean canEdit = isCreator && isPending;
+        boolean canEdit =
+                isCreator &&
+                        isPending &&
+                        !hasRoute;
 
-        boolean canDelete = isCreator && isPending && !hasRoute && !hasCollector;
+        boolean canDelete =
+                isCreator &&
+                        isPending &&
+                        !hasRoute &&
+                        !hasCollector;
 
-        boolean canClaim = isCollector && !isCreator && isPending && !hasCollector;
+        boolean canClaim =
+                isCollector &&
+                        !isCreator &&
+                        isPending &&
+                        !hasCollector &&
+                        !hasRoute;
 
-        boolean canUnclaim = isCollector && isCurrentCollector && isAssigned && !hasRoute;
+        boolean canUnclaim =
+                isCollector &&
+                        isCurrentCollector &&
+                        isAssigned &&
+                        !hasRoute;
 
-        // -------------------------------------------------
-        // Build policy
-        // -------------------------------------------------
         return new ProductActionPolicy(
                 canEdit,
                 canDelete,
                 canClaim,
                 canUnclaim
         );
+    }
+
+    // =====================================================
+    // Helpers
+    // =====================================================
+
+    private static boolean isSameUser(User user, UUID userId) {
+        return user != null &&
+                user.getId() != null &&
+                user.getId().equals(userId);
+    }
+
+    private static ProductActionPolicy denyAll() {
+        return new ProductActionPolicy(false, false, false, false);
     }
 }
