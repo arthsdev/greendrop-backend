@@ -17,10 +17,12 @@ import java.util.List;
 @DecoratedWith(RouteMapperDecorator.class)
 public interface RouteMapper {
 
-    @Mapping(target = "status", expression = "java(route.getStatus() != null ? route.getStatus().name() : null)")
+    @Mapping(target = "status",
+            expression = "java(route.getStatus() != null ? route.getStatus().name() : null)")
     RouteResponseDTO toResponse(Route route);
 
-    @Mapping(target = "status", expression = "java(stop.getStatus() != null ? stop.getStatus().name() : null)")
+    @Mapping(target = "status",
+            expression = "java(stop.getStatus() != null ? stop.getStatus().name() : null)")
     RouteStopDTO toStopResponse(RouteStop stop);
 
     List<RouteStopDTO> toStopResponseList(List<RouteStop> stops);

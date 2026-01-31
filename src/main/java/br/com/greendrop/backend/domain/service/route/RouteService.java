@@ -91,37 +91,29 @@ public class RouteService {
     // -------------------------
     @Transactional(readOnly = true)
     public RouteResponseDTO getRoute(UUID id) {
-        Route r = getRouteOrThrow(id);
-        authorization.authorizeRead(r);
-        r.setStops(routeStopRepository.findByRoute_IdOrderByStopOrderAsc(id));
-        return mapper.toResponse(r);
+        Route route = getRouteOrThrow(id);
+        authorization.authorizeRead(route);
+        return mapper.toResponse(route);
     }
 
     // -------------------------
-// GET ROUTES FOR COLLECTOR ON DATE (PAGINATED)
-// -------------------------
+    // GET ROUTES FOR COLLECTOR ON DATE (PAGINATED)
+    // -------------------------
     @Transactional(readOnly = true)
     public PaginatedResponse<RouteResponseDTO> getRoutesForCollectorOnDate(
             UUID collectorId,
             LocalDate date,
             Pageable pageable
     ) {
-        // Validate input parameters
         if (collectorId == null || date == null)
             throw new BadRequestException(ErrorCode.BAD_REQUEST, "invalid_params");
+
         if (!isAdminOrSelf(collectorId))
             throw new BadRequestException(ErrorCode.BAD_REQUEST, "collector.forbidden");
 
-        // Fetch paginated routes from repository
-        Page<Route> page = routeRepository.findByRouteDateAndCollectorId(date, collectorId, pageable);
+        Page<Route> page =
+                routeRepository.findWithStopsByRouteDateAndCollectorId(date, collectorId, pageable);
 
-        // Populate stops for each route and map to DTO
-        List<RouteResponseDTO> content = page.getContent().stream()
-                .peek(r -> r.setStops(routeStopRepository.findByRoute_IdOrderByStopOrderAsc(r.getId())))
-                .map(mapper::toResponse)
-                .toList();
-
-        // Create pagination metadata
         PageMetaResponse meta = new PageMetaResponse(
                 page.getNumber(),
                 page.getSize(),
@@ -131,7 +123,10 @@ public class RouteService {
                 page.hasPrevious()
         );
 
-        return new PaginatedResponse<>(meta, content);
+        return new PaginatedResponse<>(
+                meta,
+                page.map(mapper::toResponse).toList()
+        );
     }
 
     // -------------------------
@@ -252,7 +247,7 @@ public class RouteService {
     // HELPERS
     // -------------------------
     private Route getRouteOrThrow(UUID id) {
-        return routeRepository.findById(id)
+        return routeRepository.findWithStopsById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROUTE_NOT_FOUND));
     }
 
