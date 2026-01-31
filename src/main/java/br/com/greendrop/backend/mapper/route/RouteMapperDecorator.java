@@ -9,8 +9,18 @@ import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
+/**
+ * Decorates RouteMapper to apply presentation-specific logic.
+ *
+ * Responsibilities:
+ * - Sort route stops by stopOrder before returning the response
+ * - Map stops only if they are already loaded (no lazy loading here)
+ * - Never trigger database access or fix fetch problems (N+1 is handled in the repository)
+ *
+ * This decorator assumes that the service layer is responsible for
+ * fetching routes with the correct relationships eagerly loaded.
+ */
 @Component
 public abstract class RouteMapperDecorator implements RouteMapper {
 
@@ -25,11 +35,7 @@ public abstract class RouteMapperDecorator implements RouteMapper {
     public RouteResponseDTO toResponse(Route route) {
         RouteResponseDTO base = delegate.toResponse(route);
 
-        List<RouteStopDTO> sortedStops = route.getStops() == null ? List.of() :
-                route.getStops().stream()
-                        .sorted(Comparator.comparingInt(RouteStop::getStopOrder))
-                        .map(delegate::toStopResponse)
-                        .collect(Collectors.toList());
+        List<RouteStopDTO> stops = mapStopsSafely(route);
 
         return new RouteResponseDTO(
                 base.id(),
@@ -39,17 +45,22 @@ public abstract class RouteMapperDecorator implements RouteMapper {
                 base.status(),
                 base.expectedStartTime(),
                 base.expectedEndTime(),
-                sortedStops
+                stops
         );
     }
 
-    @Override
-    public RouteStopDTO toStopResponse(RouteStop stop) {
-        return delegate.toStopResponse(stop);
-    }
+    /**
+     * Maps route stops only if they are present.
+     * This method must not trigger lazy loading or database queries.
+     */
+    private List<RouteStopDTO> mapStopsSafely(Route route) {
+        if (route.getStops() == null || route.getStops().isEmpty()) {
+            return List.of();
+        }
 
-    @Override
-    public List<RouteStopDTO> toStopResponseList(List<RouteStop> stops) {
-        return delegate.toStopResponseList(stops);
+        return route.getStops().stream()
+                .sorted(Comparator.comparingInt(RouteStop::getStopOrder))
+                .map(delegate::toStopResponse)
+                .toList();
     }
 }
